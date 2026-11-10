@@ -46,6 +46,7 @@
       border: 1px solid var(--border);
       margin-bottom: 16px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      align-items: flex-end;
     }
 
     .filter-group {
@@ -53,7 +54,7 @@
       flex-direction: column;
       gap: 4px;
       flex: 1;
-      min-width: 130px;
+      min-width: 140px;
     }
 
     .filter-group label {
@@ -70,6 +71,18 @@
       background-color: #FFF;
       font-size: 0.85rem;
       color: var(--text);
+    }
+
+    /* Style spécifique pour le select multiple des niveaux */
+    select[multiple] {
+      height: 75px;
+      background-color: #FFF;
+    }
+
+    .hint-text {
+      font-size: 0.65rem;
+      color: #a0aec0;
+      margin-top: 2px;
     }
 
     /* CARTES KPI */
@@ -112,6 +125,7 @@
 
     .kpi-sub {
       font-size: 0.7rem;
+      font-weight: normal;
       color: #718096;
       margin-top: 2px;
     }
@@ -158,19 +172,6 @@
       background: #E2E8F0;
       color: #2D3748;
     }
-
-    /* CONSOLE DE DEBUG VISIBLE EN BAS SI BESOIN */
-    #debug-box {
-      font-family: monospace;
-      font-size: 0.75rem;
-      background: #1A202C;
-      color: #6EE7B7;
-      padding: 8px;
-      border-radius: 6px;
-      margin-top: 15px;
-      max-height: 100px;
-      overflow-y: auto;
-    }
   </style>
 </head>
 <body>
@@ -192,8 +193,9 @@
       <select id="filter-cycle" onchange="updateDashboard()"><option value="ALL">Tous</option></select>
     </div>
     <div class="filter-group">
-      <label for="filter-niveau">Niveau</label>
-      <select id="filter-niveau" onchange="updateDashboard()"><option value="ALL">Tous</option></select>
+      <label for="filter-niveau">Niveau (Multisélection)</label>
+      <select id="filter-niveau" multiple onchange="updateDashboard()"></select>
+      <span class="hint-text">Maintenez Ctrl (ou Cmd) pour en sélectionner plusieurs</span>
     </div>
     <div class="filter-group">
       <label for="filter-discipline">Champ Disciplinaire</label>
@@ -258,8 +260,6 @@
     </table>
   </div>
 
-  <div id="debug-box">Chargement des données Grist...</div>
-
   <script>
     let ecolesRecords = [];
     let voeuxMap = {};     
@@ -269,10 +269,6 @@
 
     grist.onRecords(function(records) {
       ecolesRecords = records;
-      if (records && records.length > 0) {
-        // Affiche les colonnes détectées dans la console du widget pour vérification
-        document.getElementById('debug-box').textContent = "Colonnes détectées : " + Object.keys(records[0]).join(', ');
-      }
       fetchRelatedTables();
     });
 
@@ -280,15 +276,11 @@
       try {
         const voeuxRows = await grist.docApi.fetchTable('Table_voeux');
         voeuxMap = {};
-        if (voeuxRows) {
-          const codes = voeuxRows.CodeParcours || voeuxRows.codeParcours;
-          const couts = voeuxRows.CoutParcours || voeuxRows.coutParcours;
-          if (codes) {
-            for (let i = 0; i < codes.length; i++) {
-              const code = String(codes[i] || '').trim();
-              const cout = Number(couts ? couts[i] : 0) || 0;
-              if (code) voeuxMap[code] = { cout: cout };
-            }
+        if (voeuxRows && voeuxRows.CodeParcours) {
+          for (let i = 0; i < voeuxRows.CodeParcours.length; i++) {
+            const code = String(voeuxRows.CodeParcours[i] || '').trim();
+            const cout = Number(voeuxRows.CoutParcours ? voeuxRows.CoutParcours[i] : 0) || 0;
+            if (code) voeuxMap[code] = { cout: cout };
           }
         }
       } catch (e) { console.warn("Table_voeux non trouvée ou vide", e); }
@@ -296,20 +288,23 @@
       try {
         const parcoursRows = await grist.docApi.fetchTable('Table_parcours');
         parcoursMap = {};
-        if (parcoursRows) {
-          const codes = parcoursRows.CodeParcours || parcoursRows.codeParcours;
-          const types = parcoursRows.TypeParcours || parcoursRows.typeParcours;
-          if (codes) {
-            for (let i = 0; i < codes.length; i++) {
-              const code = String(codes[i] || '').trim();
-              const typeP = String(types ? types[i] : 'Non renseigné').trim();
-              if (code) parcoursMap[code] = { typeParcours: typeP || 'Non renseigné' };
-            }
+        if (parcoursRows && parcoursRows.CodeParcours) {
+          for (let i = 0; i < parcoursRows.CodeParcours.length; i++) {
+            const code = String(parcoursRows.CodeParcours[i] || '').trim();
+            const typeP = String(parcoursRows.TypeParcours ? parcoursRows.TypeParcours[i] : 'Non renseigné').trim();
+            if (code) parcoursMap[code] = { typeParcours: typeP || 'Non renseigné' };
           }
         }
       } catch (e) { console.warn("Table_parcours non trouvée ou vide", e); }
 
       populateFilters(ecolesRecords);
+    }
+
+    function extractValues(val) {
+      if (!val) return [];
+      if (Array.isArray(val)) return val.map(v => String(v).trim());
+      // Grist renvoie parfois les choix multiples sous forme de chaînes listées ou de tableaux convertis
+      return String(val).split(',').map(v => v.trim()).filter(Boolean);
     }
 
     function populateFilters(records) {
@@ -320,17 +315,15 @@
       const disciplines = new Set();
 
       records.forEach(r => {
-        const annee = r.AnneeScolaire || r.anneeScolaire || r.Annee;
-        const ecole = r.Ecole || r.ecole || r.NomEcole;
-        const cycle = r.Cycle || r.cycle;
-        const niveau = r.Niveau || r.niveau;
-        const code = String(r.CodeParcours || r.codeParcours || '').trim();
-
-        if (annee) annees.add(String(annee).trim());
-        if (ecole) ecoles.add(String(ecole).trim());
-        if (cycle) cycles.add(String(cycle).trim());
-        if (niveau) niveaux.add(String(niveau).trim());
+        if (r.AnneeScolaire) annees.add(String(r.AnneeScolaire).trim());
+        if (r.Ecole) ecoles.add(String(r.Ecole).trim());
+        if (r.Cycle) cycles.add(String(r.Cycle).trim());
         
+        // Extraction propre pour les choix multiples de niveaux
+        const nivList = extractValues(r.Niveau);
+        nivList.forEach(n => niveaux.add(n));
+
+        const code = String(r.CodeParcours || '').trim();
         if (code && parcoursMap[code] && parcoursMap[code].typeParcours) {
           disciplines.add(parcoursMap[code].typeParcours);
         }
@@ -339,7 +332,7 @@
       fillSelect('filter-annee', annees, false);
       fillSelect('filter-ecole', ecoles, true);
       fillSelect('filter-cycle', cycles, true);
-      fillSelect('filter-niveau', niveaux, true);
+      fillMultiSelect('filter-niveau', niveaux); // Remplissage spécifique multi-select
       fillSelect('filter-discipline', disciplines, true);
 
       const anneeSelect = document.getElementById('filter-annee');
@@ -374,25 +367,55 @@
       }
     }
 
+    function fillMultiSelect(elemId, setValues) {
+      const select = document.getElementById(elemId);
+      // Conserve les éléments déjà sélectionnés si possible
+      const selectedValues = Array.from(select.selectedOptions).map(o => o.value);
+      select.innerHTML = '';
+
+      // Option "Tous" virtuelle (si rien n'est sélectionné ou explicite)
+      Array.from(setValues).sort().forEach(val => {
+        const opt = document.createElement('option');
+        opt.value = val;
+        opt.textContent = val;
+        if (selectedValues.length === 0 || selectedValues.includes(val)) {
+          // Par défaut, tout sélectionner pour ne pas filtrer à vide au premier chargement
+          opt.selected = true;
+        }
+        select.appendChild(opt);
+      });
+    }
+
     function updateDashboard() {
       const selAnnee = document.getElementById('filter-annee').value;
       const selEcole = document.getElementById('filter-ecole').value;
       const selCycle = document.getElementById('filter-cycle').value;
-      const selNiveau = document.getElementById('filter-niveau').value;
+      
+      const niveauSelect = document.getElementById('filter-niveau');
+      const selectedNiveaux = Array.from(niveauSelect.selectedOptions).map(o => o.value);
+
       const selDisc = document.getElementById('filter-discipline').value;
 
       const filtered = ecolesRecords.filter(r => {
-        const annee = String(r.AnneeScolaire || r.anneeScolaire || r.Annee || '').trim();
-        const ecole = String(r.Ecole || r.ecole || r.NomEcole || '').trim();
-        const cycle = String(r.Cycle || r.cycle || '').trim();
-        const niveau = String(r.Niveau || r.niveau || '').trim();
-        const code = String(r.CodeParcours || r.codeParcours || '').trim();
+        const annee = String(r.AnneeScolaire || '').trim();
+        const ecole = String(r.Ecole || '').trim();
+        const cycle = String(r.Cycle || '').trim();
+        
+        const rowNiveaux = extractValues(r.Niveau);
+
+        const code = String(r.CodeParcours || '').trim();
         const disc = (parcoursMap[code] && parcoursMap[code].typeParcours) ? parcoursMap[code].typeParcours : 'Non renseigné';
 
         if (selAnnee && selAnnee !== 'ALL' && annee !== selAnnee) return false;
         if (selEcole && selEcole !== 'ALL' && ecole !== selEcole) return false;
         if (selCycle && selCycle !== 'ALL' && cycle !== selCycle) return false;
-        if (selNiveau && selNiveau !== 'ALL' && niveau !== selNiveau) return false;
+        
+        // Filtre multi-niveaux : la classe doit contenir au moins l'un des niveaux sélectionnés
+        if (selectedNiveaux.length > 0) {
+          const matchNiveau = rowNiveaux.some(n => selectedNiveaux.includes(n));
+          if (!matchNiveau) return false;
+        }
+
         if (selDisc && selDisc !== 'ALL' && disc !== selDisc) return false;
         return true;
       });
@@ -408,13 +431,12 @@
       const schoolMap = {};
 
       filtered.forEach(r => {
-        // Lecture tolérante des effectifs
-        const eff = Number(r.EffectifsClasse || r.effectifsClasse || r.Effectif || r.effectif || 0) || 0;
-        const ecoleName = String(r.Ecole || r.ecole || r.NomEcole || 'Non renseignée').trim();
-        const cycleName = String(r.Cycle || r.cycle || 'Cycle non renseigné').trim();
+        const eff = Number(r.EffectifsClasse) || 0;
+        const ecoleName = String(r.Ecole || 'Non renseignée').trim();
+        const cycleName = String(r.Cycle || 'Cycle non renseigné').trim();
         
         const schoolKey = `${ecoleName} (${cycleName})`;
-        const code = String(r.CodeParcours || r.codeParcours || '').trim();
+        const code = String(r.CodeParcours || '').trim();
 
         if (!schoolMap[schoolKey]) {
           schoolMap[schoolKey] = { classes: 0, eleves: 0, eac: 0, budget: 0, mus: 0, cin: 0, cho: 0, cham: 0 };
@@ -422,20 +444,11 @@
         schoolMap[schoolKey].classes += 1;
         schoolMap[schoolKey].eleves += eff;
 
-        // Lecture ultra-tolérante des indicateurs (gère booléens, 1, '1', true, truthy)
         const hasParcours = Boolean(code && code !== '' && code !== '0' && code !== 'null' && code !== 'undefined');
-        
-        const passVal = r.PasseportMusique !== undefined ? r.PasseportMusique : r.passeportMusique;
-        const hasPassMusique = Boolean(passVal && passVal !== 0 && passVal !== '0' && passVal !== 'false');
-
-        const cinVal = r.Ecole_Cinema !== undefined ? r.Ecole_Cinema : (r.ecole_cinema !== undefined ? r.ecole_cinema : r.EcoleCinema);
-        const hasCinema = Boolean(cinVal && Number(cinVal) > 0);
-
-        const choVal = r.Chorale_CRR93 !== undefined ? r.Chorale_CRR93 : (r.chorale_CRR93 !== undefined ? r.chorale_CRR93 : r.Chorale);
-        const hasChorale = Boolean(choVal && Number(choVal) > 0);
-
-        const chamVal = r["Sensibilisation_CHAM/CHAT"] !== undefined ? r["Sensibilisation_CHAM/CHAT"] : r.Sensibilisation_CHAM_CHAT;
-        const hasCham = Boolean(chamVal && Number(chamVal) > 0);
+        const hasPassMusique = Boolean(r.PasseportMusique && r.PasseportMusique !== 'false');
+        const hasCinema = Boolean(r.Ecole_Cinema && Number(r.Ecole_Cinema) > 0);
+        const hasChorale = Boolean(r.Chorale_CRR93 && Number(r.Chorale_CRR93) > 0);
+        const hasCham = Boolean(r.Sensibilisation_CHAM_CHAT && Number(r.Sensibilisation_CHAM_CHAT) > 0);
 
         if (hasParcours) {
           stats.parcours.classes++;
