@@ -249,7 +249,6 @@
     let ecolesRecords = [];
     let voeuxMap = {};     
     let parcoursMap = {};  
-    let isInitialized = false;
 
     grist.ready({ requiredAccess: 'full' });
 
@@ -305,18 +304,16 @@
         }
       });
 
-      // Remplissage des menus déroulants uniques
-      fillSelect('filter-annee', annees, false);
+      fillSelect('filter-annee', annees, false); // Pas d'option "Tous" pour l'année pour forcer un choix ou cibler la première
       fillSelect('filter-ecole', ecoles, true);
       fillSelect('filter-cycle', cycles, true);
       fillSelect('filter-niveau', niveaux, true);
       fillSelect('filter-discipline', disciplines, true);
 
-      // Sélection par défaut de la première année disponible si non initialisé
-      if (!isInitialized && annees.size > 0) {
-        const anneeSelect = document.getElementById('filter-annee');
-        anneeSelect.value = Array.from(annees).sort()[0]; // Sélectionne la première année par défaut
-        isInitialized = true;
+      // Force la sélection par défaut de la première année si le champ est vide
+      const anneeSelect = document.getElementById('filter-annee');
+      if (anneeSelect.options.length > 0 && !anneeSelect.value) {
+        anneeSelect.selectedIndex = 0;
       }
 
       updateDashboard();
@@ -341,7 +338,6 @@
         select.appendChild(opt);
       });
 
-      // Restaure la valeur sélectionnée si elle existe toujours
       if (currentVal && Array.from(setValues).includes(currentVal)) {
         select.value = currentVal;
       }
@@ -381,13 +377,12 @@
       const schoolMap = {};
 
       filtered.forEach(r => {
-        const eff = Number(r.EffectifsClasse || r.Effectif || 0) || 0;
+        // Lecture exacte des noms de colonnes fournis
+        const eff = Number(r.EffectifsClasse) || 0;
         const ecoleName = String(r.Ecole || 'Non renseignée').trim();
         const cycleName = String(r.Cycle || 'Cycle non renseigné').trim();
         
-        // Clé unique combinant École et Cycle pour dissocier Maternelle et Élémentaire
         const schoolKey = `${ecoleName} (${cycleName})`;
-
         const code = String(r.CodeParcours || '').trim();
 
         if (!schoolMap[schoolKey]) {
@@ -396,11 +391,12 @@
         schoolMap[schoolKey].classes += 1;
         schoolMap[schoolKey].eleves += eff;
 
+        // Évaluation exacte des champs booléens et numériques
         const hasParcours = Boolean(code && code !== '' && code !== '0' && code !== 'null');
-        const hasPassMusique = Boolean(r.PasseportMusique === true || r.PasseportMusique === 1 || r.PasseportMusique === '1');
-        const hasCinema = Boolean(r.Ecole_Cinema === true || r.Ecole_Cinema === 1 || r.Ecole_Cinema === '1');
-        const hasChorale = Boolean(r.Chorale_CRR93 === true || r.Chorale_CRR93 === 1 || r.Chorale_CRR93 === '1');
-        const hasCham = Boolean(r.Sensibilisation_CHAM_CHAT === true || r.Sensibilisation_CHAM_CHAT === 1 || r.Sensibilisation_CHAM_CHAT === '1');
+        const hasPassMusique = (r.PasseportMusique === true || r.PasseportMusique === 1 || r.PasseportMusique === '1');
+        const hasCinema = (Number(r.Ecole_Cinema) === 1);
+        const hasChorale = (Number(r.Chorale_CRR93) === 1);
+        const hasCham = (Number(r["Sensibilisation_CHAM/CHAT"]) === 1 || Number(r.Sensibilisation_CHAM_CHAT) === 1);
 
         if (hasParcours) {
           stats.parcours.classes++;
