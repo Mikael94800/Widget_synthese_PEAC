@@ -158,6 +158,19 @@
       background: #E2E8F0;
       color: #2D3748;
     }
+
+    /* CONSOLE DE DEBUG VISIBLE EN BAS SI BESOIN */
+    #debug-box {
+      font-family: monospace;
+      font-size: 0.75rem;
+      background: #1A202C;
+      color: #6EE7B7;
+      padding: 8px;
+      border-radius: 6px;
+      margin-top: 15px;
+      max-height: 100px;
+      overflow-y: auto;
+    }
   </style>
 </head>
 <body>
@@ -245,6 +258,8 @@
     </table>
   </div>
 
+  <div id="debug-box">Chargement des données Grist...</div>
+
   <script>
     let ecolesRecords = [];
     let voeuxMap = {};     
@@ -254,6 +269,10 @@
 
     grist.onRecords(function(records) {
       ecolesRecords = records;
+      if (records && records.length > 0) {
+        // Affiche les colonnes détectées dans la console du widget pour vérification
+        document.getElementById('debug-box').textContent = "Colonnes détectées : " + Object.keys(records[0]).join(', ');
+      }
       fetchRelatedTables();
     });
 
@@ -261,11 +280,15 @@
       try {
         const voeuxRows = await grist.docApi.fetchTable('Table_voeux');
         voeuxMap = {};
-        if (voeuxRows && voeuxRows.CodeParcours) {
-          for (let i = 0; i < voeuxRows.CodeParcours.length; i++) {
-            const code = String(voeuxRows.CodeParcours[i] || '').trim();
-            const cout = Number(voeuxRows.CoutParcours ? voeuxRows.CoutParcours[i] : 0) || 0;
-            if (code) voeuxMap[code] = { cout: cout };
+        if (voeuxRows) {
+          const codes = voeuxRows.CodeParcours || voeuxRows.codeParcours;
+          const couts = voeuxRows.CoutParcours || voeuxRows.coutParcours;
+          if (codes) {
+            for (let i = 0; i < codes.length; i++) {
+              const code = String(codes[i] || '').trim();
+              const cout = Number(couts ? couts[i] : 0) || 0;
+              if (code) voeuxMap[code] = { cout: cout };
+            }
           }
         }
       } catch (e) { console.warn("Table_voeux non trouvée ou vide", e); }
@@ -273,11 +296,15 @@
       try {
         const parcoursRows = await grist.docApi.fetchTable('Table_parcours');
         parcoursMap = {};
-        if (parcoursRows && parcoursRows.CodeParcours) {
-          for (let i = 0; i < parcoursRows.CodeParcours.length; i++) {
-            const code = String(parcoursRows.CodeParcours[i] || '').trim();
-            const typeP = String(parcoursRows.TypeParcours ? parcoursRows.TypeParcours[i] : 'Non renseigné').trim();
-            if (code) parcoursMap[code] = { typeParcours: typeP || 'Non renseigné' };
+        if (parcoursRows) {
+          const codes = parcoursRows.CodeParcours || parcoursRows.codeParcours;
+          const types = parcoursRows.TypeParcours || parcoursRows.typeParcours;
+          if (codes) {
+            for (let i = 0; i < codes.length; i++) {
+              const code = String(codes[i] || '').trim();
+              const typeP = String(types ? types[i] : 'Non renseigné').trim();
+              if (code) parcoursMap[code] = { typeParcours: typeP || 'Non renseigné' };
+            }
           }
         }
       } catch (e) { console.warn("Table_parcours non trouvée ou vide", e); }
@@ -293,24 +320,28 @@
       const disciplines = new Set();
 
       records.forEach(r => {
-        if (r.AnneeScolaire) annees.add(String(r.AnneeScolaire).trim());
-        if (r.Ecole) ecoles.add(String(r.Ecole).trim());
-        if (r.Cycle) cycles.add(String(r.Cycle).trim());
-        if (r.Niveau) niveaux.add(String(r.Niveau).trim());
+        const annee = r.AnneeScolaire || r.anneeScolaire || r.Annee;
+        const ecole = r.Ecole || r.ecole || r.NomEcole;
+        const cycle = r.Cycle || r.cycle;
+        const niveau = r.Niveau || r.niveau;
+        const code = String(r.CodeParcours || r.codeParcours || '').trim();
+
+        if (annee) annees.add(String(annee).trim());
+        if (ecole) ecoles.add(String(ecole).trim());
+        if (cycle) cycles.add(String(cycle).trim());
+        if (niveau) niveaux.add(String(niveau).trim());
         
-        const code = String(r.CodeParcours || '').trim();
         if (code && parcoursMap[code] && parcoursMap[code].typeParcours) {
           disciplines.add(parcoursMap[code].typeParcours);
         }
       });
 
-      fillSelect('filter-annee', annees, false); // Pas d'option "Tous" pour l'année pour forcer un choix ou cibler la première
+      fillSelect('filter-annee', annees, false);
       fillSelect('filter-ecole', ecoles, true);
       fillSelect('filter-cycle', cycles, true);
       fillSelect('filter-niveau', niveaux, true);
       fillSelect('filter-discipline', disciplines, true);
 
-      // Force la sélection par défaut de la première année si le champ est vide
       const anneeSelect = document.getElementById('filter-annee');
       if (anneeSelect.options.length > 0 && !anneeSelect.value) {
         anneeSelect.selectedIndex = 0;
@@ -351,11 +382,11 @@
       const selDisc = document.getElementById('filter-discipline').value;
 
       const filtered = ecolesRecords.filter(r => {
-        const annee = String(r.AnneeScolaire || '').trim();
-        const ecole = String(r.Ecole || '').trim();
-        const cycle = String(r.Cycle || '').trim();
-        const niveau = String(r.Niveau || '').trim();
-        const code = String(r.CodeParcours || '').trim();
+        const annee = String(r.AnneeScolaire || r.anneeScolaire || r.Annee || '').trim();
+        const ecole = String(r.Ecole || r.ecole || r.NomEcole || '').trim();
+        const cycle = String(r.Cycle || r.cycle || '').trim();
+        const niveau = String(r.Niveau || r.niveau || '').trim();
+        const code = String(r.CodeParcours || r.codeParcours || '').trim();
         const disc = (parcoursMap[code] && parcoursMap[code].typeParcours) ? parcoursMap[code].typeParcours : 'Non renseigné';
 
         if (selAnnee && selAnnee !== 'ALL' && annee !== selAnnee) return false;
@@ -377,13 +408,13 @@
       const schoolMap = {};
 
       filtered.forEach(r => {
-        // Lecture exacte des noms de colonnes fournis
-        const eff = Number(r.EffectifsClasse) || 0;
-        const ecoleName = String(r.Ecole || 'Non renseignée').trim();
-        const cycleName = String(r.Cycle || 'Cycle non renseigné').trim();
+        // Lecture tolérante des effectifs
+        const eff = Number(r.EffectifsClasse || r.effectifsClasse || r.Effectif || r.effectif || 0) || 0;
+        const ecoleName = String(r.Ecole || r.ecole || r.NomEcole || 'Non renseignée').trim();
+        const cycleName = String(r.Cycle || r.cycle || 'Cycle non renseigné').trim();
         
         const schoolKey = `${ecoleName} (${cycleName})`;
-        const code = String(r.CodeParcours || '').trim();
+        const code = String(r.CodeParcours || r.codeParcours || '').trim();
 
         if (!schoolMap[schoolKey]) {
           schoolMap[schoolKey] = { classes: 0, eleves: 0, eac: 0, budget: 0, mus: 0, cin: 0, cho: 0, cham: 0 };
@@ -391,12 +422,20 @@
         schoolMap[schoolKey].classes += 1;
         schoolMap[schoolKey].eleves += eff;
 
-        // Évaluation exacte des champs booléens et numériques
-        const hasParcours = Boolean(code && code !== '' && code !== '0' && code !== 'null');
-        const hasPassMusique = (r.PasseportMusique === true || r.PasseportMusique === 1 || r.PasseportMusique === '1');
-        const hasCinema = (Number(r.Ecole_Cinema) === 1);
-        const hasChorale = (Number(r.Chorale_CRR93) === 1);
-        const hasCham = (Number(r["Sensibilisation_CHAM/CHAT"]) === 1 || Number(r.Sensibilisation_CHAM_CHAT) === 1);
+        // Lecture ultra-tolérante des indicateurs (gère booléens, 1, '1', true, truthy)
+        const hasParcours = Boolean(code && code !== '' && code !== '0' && code !== 'null' && code !== 'undefined');
+        
+        const passVal = r.PasseportMusique !== undefined ? r.PasseportMusique : r.passeportMusique;
+        const hasPassMusique = Boolean(passVal && passVal !== 0 && passVal !== '0' && passVal !== 'false');
+
+        const cinVal = r.Ecole_Cinema !== undefined ? r.Ecole_Cinema : (r.ecole_cinema !== undefined ? r.ecole_cinema : r.EcoleCinema);
+        const hasCinema = Boolean(cinVal && Number(cinVal) > 0);
+
+        const choVal = r.Chorale_CRR93 !== undefined ? r.Chorale_CRR93 : (r.chorale_CRR93 !== undefined ? r.chorale_CRR93 : r.Chorale);
+        const hasChorale = Boolean(choVal && Number(choVal) > 0);
+
+        const chamVal = r["Sensibilisation_CHAM/CHAT"] !== undefined ? r["Sensibilisation_CHAM/CHAT"] : r.Sensibilisation_CHAM_CHAT;
+        const hasCham = Boolean(chamVal && Number(chamVal) > 0);
 
         if (hasParcours) {
           stats.parcours.classes++;
