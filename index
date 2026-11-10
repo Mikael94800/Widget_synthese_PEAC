@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tableau de Bord PEAC — Grist Widget</title>
+
+  <!-- API Grist officielle (fournie directement par le serveur Grist) -->
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+
+  <style>
+    :root {
+      --primary: #1A365D;
+      --secondary: #2B6CB0;
+      --bg: #F7FAFC;
+      --card-bg: #FFFFFF;
+      --text: #2D3748;
+      --border: #E2E8F0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+
+    h2 {
+      color: var(--primary);
+      margin-top: 0;
+      margin-bottom: 12px;
+      font-size: 1.25rem;
+    }
+
+    /* BARRE DE FILTRES DROPDOWN */
+    .filters-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      background: var(--card-bg);
+      padding: 12px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1;
+      min-width: 140px;
+    }
+
+    .filter-group label {
+      font-size: 0.75rem;
+      font-weight: bold;
+      color: #718096;
+      text-transform: uppercase;
+    }
+
+    .filter-group select {
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background-color: #FFF;
+      font-size: 0.875rem;
+      color: var(--text);
+    }
+
+    /* CARTOUCHE DE KPI EN HAUT */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .kpi-card {
+      background: var(--card-bg);
+      padding: 12px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--secondary);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    .kpi-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #4A5568;
+      margin-bottom: 6px;
+    }
+
+    .kpi-value {
+      font-size: 1.4rem;
+      font-weight: bold;
+      color: var(--primary);
+    }
+
+    .kpi-sub {
+      font-size: 0.75rem;
+      color: #718096;
+      margin-top: 2px;
+    }
+
+    /* TABLEAU DE REPARTITION DETAILLEE */
+    .table-container {
+      background: var(--card-bg);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      overflow-x: auto;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.85rem;
+    }
+
+    th, td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th {
+      background-color: #EDF2F7;
+      color: var(--primary);
+      font-weight: bold;
+      position: sticky;
+      top: 0;
+    }
+
+    tr:hover {
+      background-color: #F7FAFC;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: bold;
+      background: #E2E8F0;
+      color: #2D3748;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>📊 Synthèse globale & Filtres croisés PEAC</h2>
+
+  <!-- FILTRES CROISÉS -->
+  <div class="filters-bar">
+    <div class="filter-group">
+      <label for="filter-annee">Année Scolaire</label>
+      <select id="filter-annee" onchange="updateDashboard()"><option value="ALL">Toutes</option></select>
+    </div>
+    <div class="filter-group">
+      <label for="filter-ecole">École</label>
+      <select id="filter-ecole" onchange="updateDashboard()"><option value="ALL">Toutes</option></select>
+    </div>
+    <div class="filter-group">
+      <label for="filter-cycle">Cycle</label>
+      <select id="filter-cycle" onchange="updateDashboard()"><option value="ALL">Tous</option></select>
+    </div>
+    <div class="filter-group">
+      <label for="filter-niveau">Niveau</label>
+      <select id="filter-niveau" onchange="updateDashboard()"><option value="ALL">Tous</option></select>
+    </div>
+  </div>
+
+  <!-- CARTES KPI / INDICATEURS CLÉS -->
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-title">Parcours EAC</div>
+      <div class="kpi-value" id="kpi-parcours-classes">0 cl.</div>
+      <div class="kpi-sub" id="kpi-parcours-eleves">0 élèves</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-title">Passeport Musique</div>
+      <div class="kpi-value" id="kpi-passmusique-classes">0 cl.</div>
+      <div class="kpi-sub" id="kpi-passmusique-eleves">0 élèves</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-title">École & Cinéma</div>
+      <div class="kpi-value" id="kpi-cinema-classes">0 cl.</div>
+      <div class="kpi-sub" id="kpi-cinema-eleves">0 élèves</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-title">Chorale CRR93</div>
+      <div class="kpi-value" id="kpi-chorale-classes">0 cl.</div>
+      <div class="kpi-sub" id="kpi-chorale-eleves">0 élèves</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-title">Sensibilisation CHAM/CHAT</div>
+      <div class="kpi-value" id="kpi-cham-classes">0 cl.</div>
+      <div class="kpi-sub" id="kpi-cham-eleves">0 élèves</div>
+    </div>
+  </div>
+
+  <!-- TABLEAU RÉCAPITULATIF CROISÉ -->
+  <h2>🏫 Répartition détaillée par École</h2>
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>École</th>
+          <th>Nombre de classes</th>
+          <th>Total Élèves</th>
+          <th>Parcours EAC</th>
+          <th>Passeport Musique</th>
+          <th>École & Cinéma</th>
+          <th>Chorale</th>
+          <th>CHAM/CHAT</th>
+        </tr>
+      </thead>
+      <tbody id="summary-table-body">
+        <!-- Rempli dynamiquement en JS -->
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    let rawRecords = [];
+
+    // 1. Initialisation de la connexion à la table Grist
+    grist.onRecords(function(records) {
+      rawRecords = records;
+      populateFilters(records);
+      updateDashboard();
+    });
+
+    grist.ready({ requiredAccess: 'read' });
+
+    // 2. Alimentation dynamique des filtres déroulants
+    function populateFilters(records) {
+      const annees = new Set();
+      const ecoles = new Set();
+      const cycles = new Set();
+      const niveaux = new Set();
+
+      records.forEach(r => {
+        if (r.AnneeScolaire || r.Annee) annees.add(r.AnneeScolaire || r.Annee);
+        if (r.Ecole || r.NomEcole) ecoles.add(r.Ecole || r.NomEcole);
+        if (r.Cycle) cycles.add(r.Cycle);
+        if (r.Niveau) niveaux.add(r.Niveau);
+      });
+
+      fillSelect('filter-annee', annees);
+      fillSelect('filter-ecole', ecoles);
+      fillSelect('filter-cycle', cycles);
+      fillSelect('filter-niveau', niveaux);
+    }
+
+    function fillSelect(elemId, setValues) {
+      const select = document.getElementById(elemId);
+      const currentVal = select.value;
+      select.innerHTML = '<option value="ALL">Tous/Toutes</option>';
+      Array.from(setValues).sort().forEach(val => {
+        const opt = document.createElement('option');
+        opt.value = val;
+        opt.textContent = val;
+        select.appendChild(opt);
+      });
+      select.value = currentVal;
+    }
+
+    // 3. Calculs et mise à jour dynamique des données
+    function updateDashboard() {
+      const selectedAnnee = document.getElementById('filter-annee').value;
+      const selectedEcole = document.getElementById('filter-ecole').value;
+      const selectedCycle = document.getElementById('filter-cycle').value;
+      const selectedNiveau = document.getElementById('filter-niveau').value;
+
+      // Filtrage des données selon la sélection de l'utilisateur
+      const filtered = rawRecords.filter(r => {
+        const rAnnee = r.AnneeScolaire || r.Annee || '';
+        const rEcole = r.Ecole || r.NomEcole || '';
+        const rCycle = r.Cycle || '';
+        const rNiveau = r.Niveau || '';
+
+        if (selectedAnnee !== 'ALL' && rAnnee !== selectedAnnee) return false;
+        if (selectedEcole !== 'ALL' && rEcole !== selectedEcole) return false;
+        if (selectedCycle !== 'ALL' && rCycle !== selectedCycle) return false;
+        if (selectedNiveau !== 'ALL' && rNiveau !== selectedNiveau) return false;
+        return true;
+      });
+
+      // Compteurs d'indicateurs
+      let stats = {
+        parcours: { classes: 0, eleves: 0 },
+        passMusique: { classes: 0, eleves: 0 },
+        cinema: { classes: 0, eleves: 0 },
+        chorale: { classes: 0, eleves: 0 },
+        cham: { classes: 0, eleves: 0 }
+      };
+
+      const schoolMap = {};
+
+      filtered.forEach(r => {
+        const eff = Number(r.Effectif || r.EffectifClasse || r.Effectif_classe || 0);
+        const ecoleName = r.Ecole || r.NomEcole || 'Non renseignée';
+
+        if (!schoolMap[ecoleName]) {
+          schoolMap[ecoleName] = { classes: 0, eleves: 0, eac: 0, mus: 0, cin: 0, cho: 0, cham: 0 };
+        }
+        schoolMap[ecoleName].classes += 1;
+        schoolMap[ecoleName].eleves += eff;
+
+        // Vérification des conditions des dispositifs
+        const hasParcours = Boolean(r.CodeParcours || r.CodeAttribue || r.NomParcours);
+        const hasPassMusique = Boolean(r.PasseportMusique || r.Passeport_Musique);
+        const hasCinema = Number(r.Ecole_Cinema || r.EcoleCinema || 0) === 1;
+        const hasChorale = Number(r.Chorale_CRR93 || r.Chorale || 0) === 1;
+        const hasCham = Number(r.Sensibilisation_CHAM_CHAT || r["Sensibilisation_CHAM/CHAT"] || 0) === 1;
+
+        if (hasParcours) { stats.parcours.classes++; stats.parcours.eleves += eff; schoolMap[ecoleName].eac++; }
+        if (hasPassMusique) { stats.passMusique.classes++; stats.passMusique.eleves += eff; schoolMap[ecoleName].mus++; }
+        if (hasCinema) { stats.cinema.classes++; stats.cinema.eleves += eff; schoolMap[ecoleName].cin++; }
+        if (hasChorale) { stats.chorale.classes++; stats.chorale.eleves += eff; schoolMap[ecoleName].cho++; }
+        if (hasCham) { stats.cham.classes++; stats.cham.eleves += eff; schoolMap[ecoleName].cham++; }
+      });
+
+      // 4. Affichage des KPI
+      document.getElementById('kpi-parcours-classes').textContent = `${stats.parcours.classes} cl.`;
+      document.getElementById('kpi-parcours-eleves').textContent = `${stats.parcours.eleves} élèves`;
+
+      document.getElementById('kpi-passmusique-classes').textContent = `${stats.passMusique.classes} cl.`;
+      document.getElementById('kpi-passmusique-eleves').textContent = `${stats.passMusique.eleves} élèves`;
+
+      document.getElementById('kpi-cinema-classes').textContent = `${stats.cinema.classes} cl.`;
+      document.getElementById('kpi-cinema-eleves').textContent = `${stats.cinema.eleves} élèves`;
+
+      document.getElementById('kpi-chorale-classes').textContent = `${stats.chorale.classes} cl.`;
+      document.getElementById('kpi-chorale-eleves').textContent = `${stats.chorale.eleves} élèves`;
+
+      document.getElementById('kpi-cham-classes').textContent = `${stats.cham.classes} cl.`;
+      document.getElementById('kpi-cham-eleves').textContent = `${stats.cham.eleves} élèves`;
+
+      // 5. Remplissage du tableau par École
+      const tbody = document.getElementById('summary-table-body');
+      tbody.innerHTML = '';
+
+      Object.keys(schoolMap).sort().forEach(ecole => {
+        const d = schoolMap[ecole];
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${ecole}</strong></td>
+          <td><span class="badge">${d.classes}</span></td>
+          <td>${d.eleves}</td>
+          <td>${d.eac} cl.</td>
+          <td>${d.mus} cl.</td>
+          <td>${d.cin} cl.</td>
+          <td>${d.cho} cl.</td>
+          <td>${d.cham} cl.</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+  </script>
+</body>
+</html>
