@@ -3,15 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tableau de Bord PEAC — Grist Widget</title>
-
-  <!-- API Grist officielle (fournie directement par le serveur Grist) -->
+  <title>Tableau de Bord PEAC & Budget — Grist Widget</title>
+  
+  <!-- API Grist officielle -->
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
 
   <style>
     :root {
       --primary: #1A365D;
       --secondary: #2B6CB0;
+      --accent: #319795;
       --bg: #F7FAFC;
       --card-bg: #FFFFFF;
       --text: #2D3748;
@@ -29,21 +30,21 @@
 
     h2 {
       color: var(--primary);
-      margin-top: 0;
+      margin-top: 16px;
       margin-bottom: 12px;
-      font-size: 1.25rem;
+      font-size: 1.15rem;
     }
 
-    /* BARRE DE FILTRES DROPDOWN */
+    /* BARRE DE FILTRES */
     .filters-bar {
       display: flex;
       flex-wrap: wrap;
-      gap: 12px;
+      gap: 10px;
       background: var(--card-bg);
       padding: 12px 16px;
       border-radius: 8px;
       border: 1px solid var(--border);
-      margin-bottom: 20px;
+      margin-bottom: 16px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
 
@@ -52,62 +53,70 @@
       flex-direction: column;
       gap: 4px;
       flex: 1;
-      min-width: 140px;
+      min-width: 130px;
     }
 
     .filter-group label {
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       font-weight: bold;
       color: #718096;
       text-transform: uppercase;
     }
 
     .filter-group select {
-      padding: 6px 10px;
+      padding: 6px 8px;
       border-radius: 6px;
       border: 1px solid var(--border);
       background-color: #FFF;
-      font-size: 0.875rem;
+      font-size: 0.85rem;
       color: var(--text);
     }
 
-    /* CARTOUCHE DE KPI EN HAUT */
+    /* CARTES KPI */
     .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 12px;
-      margin-bottom: 20px;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
     }
 
     .kpi-card {
       background: var(--card-bg);
-      padding: 12px 16px;
+      padding: 12px;
       border-radius: 8px;
       border: 1px solid var(--border);
       border-left: 4px solid var(--secondary);
       box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
 
+    .kpi-card.budget {
+      border-left-color: var(--accent);
+    }
+
     .kpi-title {
-      font-size: 0.8rem;
+      font-size: 0.75rem;
       font-weight: 600;
       color: #4A5568;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
     }
 
     .kpi-value {
-      font-size: 1.4rem;
+      font-size: 1.25rem;
       font-weight: bold;
       color: var(--primary);
     }
 
+    .kpi-card.budget .kpi-value {
+      color: var(--accent);
+    }
+
     .kpi-sub {
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       color: #718096;
       margin-top: 2px;
     }
 
-    /* TABLEAU DE REPARTITION DETAILLEE */
+    /* TABLEAU RECAP */
     .table-container {
       background: var(--card-bg);
       border-radius: 8px;
@@ -120,11 +129,11 @@
       width: 100%;
       border-collapse: collapse;
       text-align: left;
-      font-size: 0.85rem;
+      font-size: 0.8rem;
     }
 
     th, td {
-      padding: 10px 14px;
+      padding: 8px 12px;
       border-bottom: 1px solid var(--border);
     }
 
@@ -142,9 +151,9 @@
 
     .badge {
       display: inline-block;
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-size: 0.75rem;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 0.7rem;
       font-weight: bold;
       background: #E2E8F0;
       color: #2D3748;
@@ -153,7 +162,7 @@
 </head>
 <body>
 
-  <h2>📊 Synthèse globale & Filtres croisés PEAC</h2>
+  <h2>📊 Synthèse PEAC, Dispositifs & Budget</h2>
 
   <!-- FILTRES CROISÉS -->
   <div class="filters-bar">
@@ -173,14 +182,23 @@
       <label for="filter-niveau">Niveau</label>
       <select id="filter-niveau" onchange="updateDashboard()"><option value="ALL">Tous</option></select>
     </div>
+    <div class="filter-group">
+      <label for="filter-discipline">Champ Disciplinaire</label>
+      <select id="filter-discipline" onchange="updateDashboard()"><option value="ALL">Tous</option></select>
+    </div>
   </div>
 
-  <!-- CARTES KPI / INDICATEURS CLÉS -->
+  <!-- CARTES KPI -->
   <div class="kpi-grid">
     <div class="kpi-card">
       <div class="kpi-title">Parcours EAC</div>
       <div class="kpi-value" id="kpi-parcours-classes">0 cl.</div>
       <div class="kpi-sub" id="kpi-parcours-eleves">0 élèves</div>
+    </div>
+    <div class="kpi-card budget">
+      <div class="kpi-title">Coût Parcours EAC</div>
+      <div class="kpi-value" id="kpi-budget-parcours">0 €</div>
+      <div class="kpi-sub">Total engagé</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-title">Passeport Musique</div>
@@ -198,22 +216,23 @@
       <div class="kpi-sub" id="kpi-chorale-eleves">0 élèves</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-title">Sensibilisation CHAM/CHAT</div>
+      <div class="kpi-title">CHAM / CHAT</div>
       <div class="kpi-value" id="kpi-cham-classes">0 cl.</div>
       <div class="kpi-sub" id="kpi-cham-eleves">0 élèves</div>
     </div>
   </div>
 
-  <!-- TABLEAU RÉCAPITULATIF CROISÉ -->
-  <h2>🏫 Répartition détaillée par École</h2>
+  <!-- TABLEAU RÉCAPITULATIF PAR ÉCOLE -->
+  <h2>🏫 Répartition & Suivi Budgétaire par École</h2>
   <div class="table-container">
     <table>
       <thead>
         <tr>
           <th>École</th>
-          <th>Nombre de classes</th>
-          <th>Total Élèves</th>
+          <th>Classes</th>
+          <th>Élèves</th>
           <th>Parcours EAC</th>
+          <th>Coût Parcours</th>
           <th>Passeport Musique</th>
           <th>École & Cinéma</th>
           <th>Chorale</th>
@@ -221,47 +240,98 @@
         </tr>
       </thead>
       <tbody id="summary-table-body">
-        <!-- Rempli dynamiquement en JS -->
+        <!-- Rempli dynamiquement -->
       </tbody>
     </table>
   </div>
 
   <script>
-    let rawRecords = [];
+    let ecolesRecords = [];
+    let voeuxMap = {};     // CodeParcours -> { CoutParcours }
+    let parcoursMap = {};  // CodeParcours -> { TypeParcours }
 
-    // 1. Initialisation de la connexion à la table Grist
-    grist.onRecords(function(records) {
-      rawRecords = records;
-      populateFilters(records);
-      updateDashboard();
+    // Synchronisation multi-tables Grist
+    grist.ready({
+      requiredAccess: 'read',
+      columns: [
+        { name: "AnneeScolaire", type: "Text" },
+        { name: "Ecole", type: "Choice" },
+        { name: "Cycle", type: "Text" },
+        { name: "Niveau", type: "Text" },
+        { name: "EffectifsClasse", type: "Numeric" },
+        { name: "CodeParcours", type: "Text" },
+        { name: "PasseportMusique", type: "Bool" },
+        { name: "Ecole_Cinema", type: "Numeric" },
+        { name: "Chorale_CRR93", type: "Numeric" },
+        { name: "Sensibilisation_CHAM/CHAT", type: "Numeric" }
+      ]
     });
 
-    grist.ready({ requiredAccess: 'read' });
+    // Écoute de Table_ecoles (principale)
+    grist.onRecords(function(records) {
+      ecolesRecords = records;
+      fetchRelatedTables();
+    });
 
-    // 2. Alimentation dynamique des filtres déroulants
+    // Chargement des tables annexes Table_voeux et Table_parcours
+    async function fetchRelatedTables() {
+      try {
+        const voeuxRows = await grist.docApi.fetchTable('Table_voeux');
+        voeuxMap = {};
+        if (voeuxRows && voeuxRows.CodeParcours && voeuxRows.CoutParcours) {
+          for (let i = 0; i < voeuxRows.CodeParcours.length; i++) {
+            const code = String(voeuxRows.CodeParcours[i] || '').trim();
+            const cout = Number(voeuxRows.CoutParcours[i] || 0);
+            if (code) voeuxMap[code] = { cout: cout };
+          }
+        }
+      } catch (e) { console.warn("Table_voeux non trouvée ou vide", e); }
+
+      try {
+        const parcoursRows = await grist.docApi.fetchTable('Table_parcours');
+        parcoursMap = {};
+        if (parcoursRows && parcoursRows.CodeParcours && parcoursRows.TypeParcours) {
+          for (let i = 0; i < parcoursRows.CodeParcours.length; i++) {
+            const code = String(parcoursRows.CodeParcours[i] || '').trim();
+            const typeP = String(parcoursRows.TypeParcours[i] || 'Non renseigné').trim();
+            if (code) parcoursMap[code] = { typeParcours: typeP };
+          }
+        }
+      } catch (e) { console.warn("Table_parcours non trouvée ou vide", e); }
+
+      populateFilters(ecolesRecords);
+      updateDashboard();
+    }
+
     function populateFilters(records) {
       const annees = new Set();
       const ecoles = new Set();
       const cycles = new Set();
       const niveaux = new Set();
+      const disciplines = new Set();
 
       records.forEach(r => {
-        if (r.AnneeScolaire || r.Annee) annees.add(r.AnneeScolaire || r.Annee);
-        if (r.Ecole || r.NomEcole) ecoles.add(r.Ecole || r.NomEcole);
-        if (r.Cycle) cycles.add(r.Cycle);
-        if (r.Niveau) niveaux.add(r.Niveau);
+        if (r.AnneeScolaire) annees.add(String(r.AnneeScolaire));
+        if (r.Ecole) ecoles.add(String(r.Ecole));
+        if (r.Cycle) cycles.add(String(r.Cycle));
+        if (r.Niveau) niveaux.add(String(r.Niveau));
+        const code = String(r.CodeParcours || '').trim();
+        if (code && parcoursMap[code] && parcoursMap[code].typeParcours) {
+          disciplines.add(parcoursMap[code].typeParcours);
+        }
       });
 
       fillSelect('filter-annee', annees);
       fillSelect('filter-ecole', ecoles);
       fillSelect('filter-cycle', cycles);
       fillSelect('filter-niveau', niveaux);
+      fillSelect('filter-discipline', disciplines);
     }
 
     function fillSelect(elemId, setValues) {
       const select = document.getElementById(elemId);
       const currentVal = select.value;
-      select.innerHTML = '<option value="ALL">Tous/Toutes</option>';
+      select.innerHTML = '<option value="ALL">Tous / Toutes</option>';
       Array.from(setValues).sort().forEach(val => {
         const opt = document.createElement('option');
         opt.value = val;
@@ -271,30 +341,31 @@
       select.value = currentVal;
     }
 
-    // 3. Calculs et mise à jour dynamique des données
     function updateDashboard() {
-      const selectedAnnee = document.getElementById('filter-annee').value;
-      const selectedEcole = document.getElementById('filter-ecole').value;
-      const selectedCycle = document.getElementById('filter-cycle').value;
-      const selectedNiveau = document.getElementById('filter-niveau').value;
+      const selAnnee = document.getElementById('filter-annee').value;
+      const selEcole = document.getElementById('filter-ecole').value;
+      const selCycle = document.getElementById('filter-cycle').value;
+      const selNiveau = document.getElementById('filter-niveau').value;
+      const selDisc = document.getElementById('filter-discipline').value;
 
-      // Filtrage des données selon la sélection de l'utilisateur
-      const filtered = rawRecords.filter(r => {
-        const rAnnee = r.AnneeScolaire || r.Annee || '';
-        const rEcole = r.Ecole || r.NomEcole || '';
-        const rCycle = r.Cycle || '';
-        const rNiveau = r.Niveau || '';
+      const filtered = ecolesRecords.filter(r => {
+        const annee = String(r.AnneeScolaire || '');
+        const ecole = String(r.Ecole || '');
+        const cycle = String(r.Cycle || '');
+        const niveau = String(r.Niveau || '');
+        const code = String(r.CodeParcours || '').trim();
+        const disc = (parcoursMap[code] && parcoursMap[code].typeParcours) ? parcoursMap[code].typeParcours : 'Non renseigné';
 
-        if (selectedAnnee !== 'ALL' && rAnnee !== selectedAnnee) return false;
-        if (selectedEcole !== 'ALL' && rEcole !== selectedEcole) return false;
-        if (selectedCycle !== 'ALL' && rCycle !== selectedCycle) return false;
-        if (selectedNiveau !== 'ALL' && rNiveau !== selectedNiveau) return false;
+        if (selAnnee !== 'ALL' && annee !== selAnnee) return false;
+        if (selEcole !== 'ALL' && ecole !== selEcole) return false;
+        if (selCycle !== 'ALL' && cycle !== selCycle) return false;
+        if (selNiveau !== 'ALL' && niveau !== selNiveau) return false;
+        if (selDisc !== 'ALL' && disc !== selDisc) return false;
         return true;
       });
 
-      // Compteurs d'indicateurs
       let stats = {
-        parcours: { classes: 0, eleves: 0 },
+        parcours: { classes: 0, eleves: 0, budget: 0 },
         passMusique: { classes: 0, eleves: 0 },
         cinema: { classes: 0, eleves: 0 },
         chorale: { classes: 0, eleves: 0 },
@@ -304,32 +375,42 @@
       const schoolMap = {};
 
       filtered.forEach(r => {
-        const eff = Number(r.Effectif || r.EffectifClasse || r.Effectif_classe || 0);
-        const ecoleName = r.Ecole || r.NomEcole || 'Non renseignée';
+        const eff = Number(r.EffectifsClasse || 0);
+        const ecoleName = String(r.Ecole || 'Non renseignée');
+        const code = String(r.CodeParcours || '').trim();
 
         if (!schoolMap[ecoleName]) {
-          schoolMap[ecoleName] = { classes: 0, eleves: 0, eac: 0, mus: 0, cin: 0, cho: 0, cham: 0 };
+          schoolMap[ecoleName] = { classes: 0, eleves: 0, eac: 0, budget: 0, mus: 0, cin: 0, cho: 0, cham: 0 };
         }
         schoolMap[ecoleName].classes += 1;
         schoolMap[ecoleName].eleves += eff;
 
-        // Vérification des conditions des dispositifs
-        const hasParcours = Boolean(r.CodeParcours || r.CodeAttribue || r.NomParcours);
-        const hasPassMusique = Boolean(r.PasseportMusique || r.Passeport_Musique);
-        const hasCinema = Number(r.Ecole_Cinema || r.EcoleCinema || 0) === 1;
-        const hasChorale = Number(r.Chorale_CRR93 || r.Chorale || 0) === 1;
-        const hasCham = Number(r.Sensibilisation_CHAM_CHAT || r["Sensibilisation_CHAM/CHAT"] || 0) === 1;
+        const hasParcours = Boolean(code && code !== '' && code !== '0');
+        const hasPassMusique = Boolean(r.PasseportMusique);
+        const hasCinema = Number(r.Ecole_Cinema || 0) === 1;
+        const hasChorale = Number(r.Chorale_CRR93 || 0) === 1;
+        const hasCham = Number(r.Sensibilisation_CHAM_CHAT || 0) === 1;
 
-        if (hasParcours) { stats.parcours.classes++; stats.parcours.eleves += eff; schoolMap[ecoleName].eac++; }
+        if (hasParcours) {
+          stats.parcours.classes++;
+          stats.parcours.eleves += eff;
+          schoolMap[ecoleName].eac++;
+
+          const cout = (voeuxMap[code] && voeuxMap[code].cout) ? voeuxMap[code].cout : 0;
+          stats.parcours.budget += cout;
+          schoolMap[ecoleName].budget += cout;
+        }
+
         if (hasPassMusique) { stats.passMusique.classes++; stats.passMusique.eleves += eff; schoolMap[ecoleName].mus++; }
         if (hasCinema) { stats.cinema.classes++; stats.cinema.eleves += eff; schoolMap[ecoleName].cin++; }
         if (hasChorale) { stats.chorale.classes++; stats.chorale.eleves += eff; schoolMap[ecoleName].cho++; }
         if (hasCham) { stats.cham.classes++; stats.cham.eleves += eff; schoolMap[ecoleName].cham++; }
       });
 
-      // 4. Affichage des KPI
+      // Affichage des KPI
       document.getElementById('kpi-parcours-classes').textContent = `${stats.parcours.classes} cl.`;
       document.getElementById('kpi-parcours-eleves').textContent = `${stats.parcours.eleves} élèves`;
+      document.getElementById('kpi-budget-parcours').textContent = `${stats.parcours.budget.toLocaleString()} €`;
 
       document.getElementById('kpi-passmusique-classes').textContent = `${stats.passMusique.classes} cl.`;
       document.getElementById('kpi-passmusique-eleves').textContent = `${stats.passMusique.eleves} élèves`;
@@ -343,7 +424,7 @@
       document.getElementById('kpi-cham-classes').textContent = `${stats.cham.classes} cl.`;
       document.getElementById('kpi-cham-eleves').textContent = `${stats.cham.eleves} élèves`;
 
-      // 5. Remplissage du tableau par École
+      // Tableau récapitulatif par école
       const tbody = document.getElementById('summary-table-body');
       tbody.innerHTML = '';
 
@@ -355,6 +436,7 @@
           <td><span class="badge">${d.classes}</span></td>
           <td>${d.eleves}</td>
           <td>${d.eac} cl.</td>
+          <td><strong>${d.budget.toLocaleString()} €</strong></td>
           <td>${d.mus} cl.</td>
           <td>${d.cin} cl.</td>
           <td>${d.cho} cl.</td>
