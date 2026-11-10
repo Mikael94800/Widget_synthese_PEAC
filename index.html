@@ -251,20 +251,8 @@
     let parcoursMap = {};  // CodeParcours -> { TypeParcours }
 
     // Synchronisation multi-tables Grist
-    grist.ready({
-      requiredAccess: 'read',
-      columns: [
-        { name: "AnneeScolaire", type: "Text" },
-        { name: "Ecole", type: "Choice" },
-        { name: "Cycle", type: "Text" },
-        { name: "Niveau", type: "Text" },
-        { name: "EffectifsClasse", type: "Numeric" },
-        { name: "CodeParcours", type: "Text" },
-        { name: "PasseportMusique", type: "Bool" },
-        { name: "Ecole_Cinema", type: "Numeric" },
-        { name: "Chorale_CRR93", type: "Numeric" },
-        { name: "Sensibilisation_CHAM/CHAT", type: "Numeric" }
-      ]
+ grist.ready({
+      requiredAccess: 'full'
     });
 
     // Écoute de Table_ecoles (principale)
