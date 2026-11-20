@@ -87,6 +87,17 @@
     .class-filter-list .group-title { font-weight: bold; color: #4a5568; padding: 7px 2px 3px; border-top: 1px solid #edf2f7; margin-top: 4px; }
     .hint-text { font-size: 0.65rem; color: #a0aec0; margin-top: 2px; }
 
+    .multi-select { min-width: 170px; min-height: 64px; padding: 6px; border:1px solid var(--border); border-radius:6px; background:#fff; font-size:.83rem; }
+    .toolbar { display:flex; justify-content:flex-end; gap:8px; margin:10px 0; }
+    .action-btn { padding:7px 11px; border:1px solid var(--secondary); border-radius:6px; background:#fff; color:var(--secondary); cursor:pointer; font-weight:600; }
+    .detail-btn { padding:5px 8px; border:1px solid var(--secondary); border-radius:5px; background:#fff; color:var(--secondary); cursor:pointer; white-space:nowrap; }
+    .modal-backdrop { display:none; position:fixed; inset:0; z-index:100; background:rgba(15,23,42,.45); padding:20px; align-items:center; justify-content:center; }
+    .modal-backdrop.open { display:flex; }
+    .modal { width:min(900px,96vw); max-height:88vh; overflow:auto; background:white; border-radius:12px; padding:18px; box-shadow:0 10px 35px rgba(0,0,0,.25); }
+    .modal-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .modal-close { border:0; background:#edf2f7; border-radius:6px; padding:6px 10px; cursor:pointer; }
+    .modal table { margin-top:12px; }
+    .modal-total { text-align:right; font-weight:bold; padding-top:12px; }
     /* CARTES KPI */
     .kpi-grid {
       display: grid;
@@ -194,21 +205,14 @@
       <label for="filter-cycle">Cycle</label>
       <select id="filter-cycle" onchange="updateDashboard()"><option value="ALL">Tous</option></select>
     </div>
-    <div class="class-filter" id="class-filter">
-      <label>Classes</label>
-      <button type="button" class="class-filter-toggle" id="class-filter-toggle" onclick="toggleClassFilter()">Toutes les classes</button>
-      <div class="class-filter-panel" id="class-filter-panel">
-        <input class="class-filter-search" id="class-filter-search" type="search" placeholder="Rechercher une classe…" oninput="renderClassChecklist()">
-        <div class="class-filter-actions">
-          <button type="button" onclick="selectAllClasses(true)">Tout sélectionner</button>
-          <button type="button" onclick="selectAllClasses(false)">Tout désélectionner</button>
-        </div>
-        <div class="class-filter-list" id="class-filter-list"></div>
-      </div>
+    <div class="filter-group">
+      <label for="filter-niveau">Niveau (choix multiples)</label>
+      <select id="filter-niveau" class="multi-select" multiple onchange="updateDashboard()" title="Sélectionner un ou plusieurs niveaux"></select>
+      <div class="hint-text">Ctrl (ou Cmd) permet plusieurs choix</div>
     </div>
     <div class="filter-group">
       <label for="filter-discipline">Champ Disciplinaire</label>
-      <select id="filter-discipline" onchange="updateDashboard()"><option value="ALL">Tous</option></select>
+      <select id="filter-discipline" class="multi-select" multiple onchange="updateDashboard()" title="Sélectionner une ou plusieurs disciplines"></select>
     </div>
   </div>
 
@@ -252,7 +256,7 @@
     <table>
       <thead>
         <tr>
-          <th>École & Type</th>
+          <th>École & Cycle</th>
           <th>Classes</th>
           <th>Élèves</th>
           <th>Parcours EAC</th>
@@ -261,6 +265,7 @@
           <th>École & Cinéma</th>
           <th>Chorale</th>
           <th>CHAM/CHAT</th>
+          <th>Action</th>
         </tr>
       </thead>
       <tbody id="summary-table-body">
@@ -268,192 +273,92 @@
       </tbody>
     </table>
   </div>
+  <div class="toolbar"><button class="action-btn" type="button" onclick="exportWorkbook()">Exporter la synthèse</button></div>
+  <div class="modal-backdrop" id="detail-modal" onclick="if(event.target===this)closeDetail()">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="detail-title">
+      <div class="modal-head"><h2 id="detail-title">Parcours attribués</h2><button class="modal-close" onclick="closeDetail()">Fermer ✕</button></div>
+      <div id="detail-content"></div>
+    </div>
+  </div>
 
   <script>
     let ecolesRecords = [];
     let voeuxMap = {};
     let parcoursMap = {};
-    let classOptions = [];
-    let selectedClassKeys = new Set();
-    let disciplineByParcours = {};
+    let parcoursById = {};
+    let disciplinesByRef = {};
+    let filteredRowsCache = [];
+    let summaryCache = [];
 
     grist.ready({ requiredAccess: 'full' });
-
-    grist.onRecords(function(records) {
-      ecolesRecords = records;
-      fetchRelatedTables();
-    });
+    grist.onRecords(function(records) { ecolesRecords = records || []; fetchRelatedTables(); });
 
     async function fetchRelatedTables() {
-      // Les coûts sont désormais lus directement dans Table_ecoles.CoutParcours.
-      // Table_voeux est conservée pour la compatibilité avec les données de vœux.
       try {
         const voeuxRows = await grist.docApi.fetchTable('Table_voeux');
         voeuxMap = {};
-        if (voeuxRows && voeuxRows.CodeParcours) {
-          for (let i = 0; i < voeuxRows.CodeParcours.length; i++) {
-            const code = String(voeuxRows.CodeParcours[i] ?? '').trim();
-            if (code) voeuxMap[code] = { partenaire: voeuxRows.Partenaire ? voeuxRows.Partenaire[i] : '' };
-          }
+        if (voeuxRows && voeuxRows.CodeParcours) for (let i=0;i<voeuxRows.CodeParcours.length;i++) {
+          const code=String(voeuxRows.CodeParcours[i]??'').trim(); if(code) { const partner=String(voeuxRows.Partenaire?.[i]??'').trim(); (voeuxMap[code] ||= new Set()); if(partner) voeuxMap[code].add(partner); }
         }
-      } catch (e) { console.warn("Table_voeux non trouvée ou vide", e); }
-
+      } catch(e) { console.warn('Table_voeux non disponible',e); }
       try {
-        const parcoursRows = await grist.docApi.fetchTable('Table_parcours');
-        parcoursMap = {};
-        if (parcoursRows && parcoursRows.NomParcours) {
-          for (let i = 0; i < parcoursRows.NomParcours.length; i++) {
-            const nom = String(parcoursRows.NomParcours[i] ?? '').trim();
-            const typeRaw = parcoursRows.TypeParcours ? parcoursRows.TypeParcours[i] : '';
-            const disciplines = extractValues(typeRaw);
-            if (nom) parcoursMap[nom] = { disciplines };
-          }
+        const rows=await grist.docApi.fetchTable('Table_parcours');
+        parcoursMap={}; parcoursById={}; disciplinesByRef={};
+        const ids=rows.id || rows.ID || [];
+        for(let i=0;i<(rows.NomParcours||[]).length;i++) {
+          const name=String(rows.NomParcours[i]??'').trim();
+          const types=extractValues(rows.TypeParcours?.[i]);
+          const recid=ids[i];
+          if(name) parcoursMap[name]={disciplines:types};
+          if(recid!=null) { parcoursById[String(recid)]={name,disciplines:types}; disciplinesByRef[String(recid)]=types; }
         }
-      } catch (e) { console.warn("Table_parcours non trouvée ou vide", e); }
-
+      } catch(e) { console.warn('Table_parcours non disponible',e); }
       populateFilters(ecolesRecords);
     }
-
     function extractValues(val) {
-      if (val == null || val === '') return [];
-      if (Array.isArray(val)) return val.map(v => String(v).trim()).filter(Boolean);
-      // Tolère les listes de choix multiples Grist (JSON ou chaînes séparées).
-      const str = String(val).trim();
-      if (!str) return [];
-      if ((str.startsWith('[') && str.endsWith(']')) || (str.startsWith('"') && str.endsWith('"'))) {
-        try {
-          const parsed = JSON.parse(str);
-          if (Array.isArray(parsed)) return parsed.map(v => String(v).trim()).filter(Boolean);
-          if (parsed != null) return [String(parsed).trim()].filter(Boolean);
-        } catch (_) {}
-      }
-      return str.split(/[;,]/).map(v => v.trim()).filter(Boolean);
+      if(val==null || val==='') return [];
+      if(Array.isArray(val)) return val.map(v=>String(v).trim()).filter(Boolean);
+      const str=String(val).trim(); if(!str) return [];
+      if((str.startsWith('[')&&str.endsWith(']'))||(str.startsWith('"')&&str.endsWith('"'))) { try { const parsed=JSON.parse(str); if(Array.isArray(parsed)) return parsed.map(v=>String(v).trim()).filter(Boolean); if(parsed!=null)return [String(parsed).trim()].filter(Boolean); } catch(_){} }
+      return str.split(/[;,]/).map(v=>v.trim()).filter(Boolean);
     }
-
-    function classKey(r) {
-      return [String(r.Ecole || '').trim(), String(r.Cycle || '').trim(), extractValues(r.Niveau).join('/'), String(r.Classe || r.NomClasse || '').trim()].join('|');
+    function refIds(val) {
+      if(Array.isArray(val)) return val.filter(v=>typeof v==='number' || (typeof v==='string' && /^\d+$/.test(v))).map(String);
+      if(typeof val==='number') return [String(val)];
+      return [];
     }
-    function classLabel(r) {
-      const school = String(r.Ecole || 'École non renseignée').trim();
-      const cycle = String(r.Cycle || '').trim();
-      const niveaux = extractValues(r.Niveau).join(', ');
-      const classe = String(r.Classe || r.NomClasse || '').trim();
-      return [school, cycle, niveaux, classe].filter(Boolean).join(' — ');
+    function getDisciplines(r) {
+      const ids=refIds(r.TypeParcours); const result=[];
+      ids.forEach(id=>(disciplinesByRef[id]||[]).forEach(d=>{if(!result.includes(d))result.push(d);}));
+      // Tolérance si le widget reçoit déjà des libellés plutôt que les identifiants de références
+      if(!result.length && typeof r.TypeParcours==='string') extractValues(r.TypeParcours).forEach(d=>{if(!/^\d+$/.test(d)&&!result.includes(d))result.push(d);});
+      const nom=String(r.NomParcours||'').trim();
+      if(!result.length && parcoursMap[nom]) return parcoursMap[nom].disciplines||[];
+      return result;
     }
-    function toggleClassFilter() {
-      document.getElementById('class-filter-panel').classList.toggle('open');
+    function selectedValues(id) { return Array.from(document.getElementById(id).selectedOptions).map(o=>o.value); }
+    function fillMultiSelect(id, values) {
+      const el=document.getElementById(id), prior=selectedValues(id); el.innerHTML='';
+      [...values].sort((a,b)=>a.localeCompare(b,'fr')).forEach(v=>{const opt=document.createElement('option');opt.value=v;opt.textContent=v;opt.selected=prior.length===0||prior.includes(v);el.appendChild(opt);});
     }
-    function renderClassChecklist() {
-      const host = document.getElementById('class-filter-list');
-      const query = document.getElementById('class-filter-search').value.toLocaleLowerCase();
-      host.innerHTML = '';
-      const grouped = {};
-      classOptions.forEach(item => {
-        if (query && !item.label.toLocaleLowerCase().includes(query)) return;
-        (grouped[item.school] ||= []).push(item);
-      });
-      Object.keys(grouped).sort().forEach(school => {
-        const title = document.createElement('div'); title.className = 'group-title'; title.textContent = school;
-        host.appendChild(title);
-        grouped[school].forEach(item => {
-          const label = document.createElement('label');
-          const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = selectedClassKeys.has(item.key);
-          cb.addEventListener('change', () => { cb.checked ? selectedClassKeys.add(item.key) : selectedClassKeys.delete(item.key); updateClassFilterLabel(); updateDashboard(); });
-          label.appendChild(cb); label.appendChild(document.createTextNode(item.label)); host.appendChild(label);
-        });
-      });
+    function fillSelect(id, values, all) {
+      const el=document.getElementById(id), prior=el.value; el.innerHTML='';
+      if(all){const opt=document.createElement('option');opt.value='ALL';opt.textContent='Toutes / Tous';el.appendChild(opt);}
+      [...values].sort((a,b)=>a.localeCompare(b,'fr')).forEach(v=>{const opt=document.createElement('option');opt.value=v;opt.textContent=v;el.appendChild(opt);});
+      if(prior && [...values].includes(prior))el.value=prior;
     }
-    function selectAllClasses(checked) {
-      const search = document.getElementById('class-filter-search').value.toLocaleLowerCase();
-      classOptions.forEach(item => { if (!search || item.label.toLocaleLowerCase().includes(search)) checked ? selectedClassKeys.add(item.key) : selectedClassKeys.delete(item.key); });
-      renderClassChecklist(); updateClassFilterLabel(); updateDashboard();
-    }
-    function updateClassFilterLabel() {
-      const button = document.getElementById('class-filter-toggle');
-      if (selectedClassKeys.size === classOptions.length) button.textContent = 'Toutes les classes';
-      else if (!selectedClassKeys.size) button.textContent = 'Aucune classe sélectionnée';
-      else button.textContent = `${selectedClassKeys.size} classe(s) sélectionnée(s)`;
-    }
-    document.addEventListener('click', event => {
-      const box = document.getElementById('class-filter');
-      if (box && !box.contains(event.target)) document.getElementById('class-filter-panel').classList.remove('open');
-    });
 
     function populateFilters(records) {
-      const annees = new Set(), ecoles = new Set(), cycles = new Set(), disciplines = new Set();
-      classOptions = [];
-      disciplineByParcours = {};
-      records.forEach(r => {
-        if (r.AnneeScolaire) annees.add(String(r.AnneeScolaire).trim());
-        if (r.Ecole) ecoles.add(String(r.Ecole).trim());
-        if (r.Cycle) cycles.add(String(r.Cycle).trim());
-        const key = classKey(r);
-        const label = classLabel(r);
-        if (!classOptions.some(item => item.key === key)) classOptions.push({key, label, school: String(r.Ecole || 'École non renseignée').trim()});
-        const code = String(r.CodeParcours ?? '').trim();
-        const nom = String(r.NomParcours ?? '').trim();
-        // Seuls les parcours attribués (CodeParcours différent de 0) nourrissent le filtre.
-        if (code && code !== '0' && nom && parcoursMap[nom]) {
-          const ds = parcoursMap[nom].disciplines || [];
-          disciplineByParcours[nom] = ds;
-          ds.forEach(d => disciplines.add(d));
-        }
+      const annees=new Set(), ecoles=new Set(), cycles=new Set(), niveaux=new Set(), disciplines=new Set();
+      records.forEach(r=>{
+        if(r.AnneeScolaire)annees.add(String(r.AnneeScolaire).trim()); if(r.Ecole)ecoles.add(String(r.Ecole).trim()); if(r.Cycle)cycles.add(String(r.Cycle).trim());
+        extractValues(r.Niveau).forEach(n=>niveaux.add(n));
+        const code=String(r.CodeParcours??'').trim(); if(code&&code!=='0')getDisciplines(r).forEach(d=>disciplines.add(d));
       });
-      classOptions.sort((a,b) => a.label.localeCompare(b.label, 'fr'));
-      const availableKeys = new Set(classOptions.map(x => x.key));
-      selectedClassKeys = new Set([...selectedClassKeys].filter(k => availableKeys.has(k)));
-      if (selectedClassKeys.size === 0 && classOptions.length) selectedClassKeys = new Set(classOptions.map(x => x.key));
-      fillSelect('filter-annee', annees, false);
-      fillSelect('filter-ecole', ecoles, true);
-      fillSelect('filter-cycle', cycles, true);
-      fillSelect('filter-discipline', disciplines, true);
-      renderClassChecklist(); updateClassFilterLabel();
-      const anneeSelect = document.getElementById('filter-annee');
-      if (anneeSelect.options.length > 0 && !anneeSelect.value) anneeSelect.selectedIndex = 0;
+      fillSelect('filter-annee',annees,false); fillSelect('filter-ecole',ecoles,true); fillSelect('filter-cycle',cycles,true);
+      fillMultiSelect('filter-niveau',niveaux); fillMultiSelect('filter-discipline',disciplines);
+      const year=document.getElementById('filter-annee'); if(year.options.length&&!year.value)year.selectedIndex=0;
       updateDashboard();
-    }
-
-    function fillSelect(elemId, setValues, addAllOption) {
-      const select = document.getElementById(elemId);
-      const currentVal = select.value;
-      select.innerHTML = '';
-      
-      if (addAllOption) {
-        const optAll = document.createElement('option');
-        optAll.value = 'ALL';
-        optAll.textContent = 'Tous / Toutes';
-        select.appendChild(optAll);
-      }
-
-      Array.from(setValues).sort().forEach(val => {
-        const opt = document.createElement('option');
-        opt.value = val;
-        opt.textContent = val;
-        select.appendChild(opt);
-      });
-
-      if (currentVal && Array.from(setValues).includes(currentVal)) {
-        select.value = currentVal;
-      }
-    }
-
-    function fillMultiSelect(elemId, setValues) {
-      const select = document.getElementById(elemId);
-      // Conserve les éléments déjà sélectionnés si possible
-      const selectedValues = Array.from(select.selectedOptions).map(o => o.value);
-      select.innerHTML = '';
-
-      // Option "Tous" virtuelle (si rien n'est sélectionné ou explicite)
-      Array.from(setValues).sort().forEach(val => {
-        const opt = document.createElement('option');
-        opt.value = val;
-        opt.textContent = val;
-        if (selectedValues.length === 0 || selectedValues.includes(val)) {
-          // Par défaut, tout sélectionner pour ne pas filtrer à vide au premier chargement
-          opt.selected = true;
-        }
-        select.appendChild(opt);
-      });
     }
 
     function updateDashboard() {
@@ -461,23 +366,23 @@
       const selEcole = document.getElementById('filter-ecole').value;
       const selCycle = document.getElementById('filter-cycle').value;
       
-      const selDisc = document.getElementById('filter-discipline').value;
+      const selDisc = selectedValues('filter-discipline');
+      const selNiveau = selectedValues('filter-niveau');
 
       const filtered = ecolesRecords.filter(r => {
         const annee = String(r.AnneeScolaire || '').trim();
         const ecole = String(r.Ecole || '').trim();
         const cycle = String(r.Cycle || '').trim();
         
-        const key = classKey(r);
-        const nomParcours = String(r.NomParcours || '').trim();
-        const discList = disciplineByParcours[nomParcours] || (parcoursMap[nomParcours] ? parcoursMap[nomParcours].disciplines : []);
+        const discList = getDisciplines(r);
+        const niveauList = extractValues(r.Niveau);
 
         if (selAnnee && selAnnee !== 'ALL' && annee !== selAnnee) return false;
         if (selEcole && selEcole !== 'ALL' && ecole !== selEcole) return false;
         if (selCycle && selCycle !== 'ALL' && cycle !== selCycle) return false;
         
-        if (!selectedClassKeys.has(key)) return false;
-        if (selDisc && selDisc !== 'ALL' && !discList.includes(selDisc)) return false;
+        if (selNiveau.length && !niveauList.some(n=>selNiveau.includes(n))) return false;
+        if (selDisc.length && !discList.some(d=>selDisc.includes(d))) return false;
         return true;
       });
 
@@ -490,6 +395,7 @@
       };
 
       const schoolMap = {};
+      filteredRowsCache = filtered;
 
       filtered.forEach(r => {
         const eff = Number(r.EffectifsClasse) || 0;
@@ -500,7 +406,7 @@
         const code = String(r.CodeParcours || '').trim();
 
         if (!schoolMap[schoolKey]) {
-          schoolMap[schoolKey] = { classes: 0, eleves: 0, eac: 0, budget: 0, mus: 0, cin: 0, cho: 0, cham: 0 };
+          schoolMap[schoolKey] = { classes: 0, eleves: 0, eac: 0, budget: 0, mus: 0, cin: 0, cho: 0, cham: 0, parcours: [] };
         }
         schoolMap[schoolKey].classes += 1;
         schoolMap[schoolKey].eleves += eff;
@@ -519,6 +425,7 @@
           const cout = Number(r.CoutParcours) || 0;
           stats.parcours.budget += cout;
           schoolMap[schoolKey].budget += cout;
+          const nm=String(r.NomParcours||'').trim(); if(nm && !schoolMap[schoolKey].parcours.some(x=>x.nom===nm)) schoolMap[schoolKey].parcours.push({nom:nm,disciplines:getDisciplines(r),partenaire:(voeuxMap[code] && voeuxMap[code].size===1 ? [...voeuxMap[code]][0] : (voeuxMap[code] && voeuxMap[code].size>1 ? 'Plusieurs partenaires possibles' : '')),cout});
         }
 
         if (hasPassMusique) { stats.passMusique.classes++; stats.passMusique.eleves += eff; schoolMap[schoolKey].mus++; }
@@ -548,22 +455,33 @@
       const tbody = document.getElementById('summary-table-body');
       tbody.innerHTML = '';
 
-      Object.keys(schoolMap).sort().forEach(sKey => {
-        const d = schoolMap[sKey];
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td><strong>${sKey}</strong></td>
-          <td><span class="badge">${d.classes}</span></td>
-          <td>${d.eleves}</td>
-          <td>${d.eac} cl.</td>
-          <td><strong>${d.budget.toLocaleString()} €</strong></td>
-          <td>${d.mus} cl.</td>
-          <td>${d.cin} cl.</td>
-          <td>${d.cho} cl.</td>
-          <td>${d.cham} cl.</td>
-        `;
-        tbody.appendChild(tr);
+      summaryCache = Object.keys(schoolMap).sort().map(sKey=>({key:sKey,...schoolMap[sKey]}));
+      summaryCache.forEach(d=>{
+        const tr=document.createElement('tr');
+        tr.innerHTML=`<td><strong>${escapeHtml(d.key)}</strong></td><td><span class="badge">${d.classes}</span></td><td>${d.eleves}</td><td>${d.eac} cl.</td><td><strong>${d.budget.toLocaleString('fr-FR')} €</strong></td><td>${d.mus} cl.</td><td>${d.cin} cl.</td><td>${d.cho} cl.</td><td>${d.cham} cl.</td><td><button class="detail-btn" type="button">Voir les parcours</button></td>`;
+        tr.querySelector('button').addEventListener('click',()=>showDetail(d)); tbody.appendChild(tr);
       });
+    }
+
+    function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+    function showDetail(d){
+      document.getElementById('detail-title').textContent=d.key+' — Parcours attribués';
+      const rows=d.parcours.slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr')).map(p=>`<tr><td>${escapeHtml(p.nom)}</td><td>${escapeHtml(p.disciplines.join(', ')||'Non renseigné')}</td><td>${escapeHtml(p.partenaire||'Non déterminé')}</td><td style="text-align:right">${Number(p.cout||0).toLocaleString('fr-FR')} €</td></tr>`).join('');
+      document.getElementById('detail-content').innerHTML=d.parcours.length?`<div><strong>${d.parcours.length} parcours</strong> · Budget total : <strong>${d.budget.toLocaleString('fr-FR')} €</strong></div><table><thead><tr><th>Parcours</th><th>Discipline</th><th>Partenaire</th><th>Coût</th></tr></thead><tbody>${rows}</tbody></table><div class="modal-total">Total : ${d.budget.toLocaleString('fr-FR')} €</div>`:'<p>Aucun parcours attribué dans les données filtrées pour cette école et ce cycle.</p>';
+      document.getElementById('detail-modal').classList.add('open');
+    }
+    function closeDetail(){document.getElementById('detail-modal').classList.remove('open');}
+    function xmlEsc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+    function exportWorkbook(){
+      const schools=summaryCache; const detail=[]; schools.forEach(s=>s.parcours.forEach(p=>detail.push([s.key,p.nom,p.disciplines.join(', '),p.partenaire,p.cout])));
+      const devices=[['École & Cycle','Classes','Élèves','Passeport Musique','École & Cinéma','Chorale CRR93','CHAM/CHAT'],...schools.map(s=>[s.key,s.classes,s.eleves,s.mus,s.cin,s.cho,s.cham])];
+      const summary=[['Indicateur','Valeur'],['Parcours classes',document.getElementById('kpi-parcours-classes').textContent],['Parcours élèves',document.getElementById('kpi-parcours-eleves').textContent],['Budget parcours',document.getElementById('kpi-budget-parcours').textContent],['Passeport Musique',document.getElementById('kpi-passmusique-classes').textContent+' / '+document.getElementById('kpi-passmusique-eleves').textContent],['École & Cinéma',document.getElementById('kpi-cinema-classes').textContent+' / '+document.getElementById('kpi-cinema-eleves').textContent],['Chorale CRR93',document.getElementById('kpi-chorale-classes').textContent+' / '+document.getElementById('kpi-chorale-eleves').textContent],['CHAM/CHAT',document.getElementById('kpi-cham-classes').textContent+' / '+document.getElementById('kpi-cham-eleves').textContent]];
+      const schoolSheet=[['École & Cycle','Classes','Élèves','Parcours attribués','Budget','Passeport Musique','École & Cinéma','Chorale','CHAM/CHAT'],...schools.map(s=>[s.key,s.classes,s.eleves,s.eac,s.budget,s.mus,s.cin,s.cho,s.cham])];
+      const detailSheet=[['École & Cycle','Parcours','Discipline','Partenaire','Coût'],...detail];
+      const sheets=[['01 Synthèse générale',summary],['02 Écoles & cycles',schoolSheet],['03 Détail parcours',detailSheet],['04 Dispositifs',devices],['05 Vœux et rangs',[ ['Note','Les données de rang/vœux ne sont pas intégrées dans cette version d’export car leur structure n’a pas été validée dans le widget.'] ]]];
+      // Export compatible Excel via SpreadsheetML (format .xml multi-feuilles, sans dépendance externe).
+      const workbook='<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'+sheets.map(([name,data])=>`<Worksheet ss:Name="${xmlEsc(name.slice(0,31))}"><Table>${data.map(row=>'<Row>'+row.map(v=>`<Cell><Data ss:Type="${typeof v==='number'?'Number':'String'}">${xmlEsc(v)}</Data></Cell>`).join('')+'</Row>').join('')}</Table></Worksheet>`).join('')+'</Workbook>';
+      const blob=new Blob([workbook],{type:'application/vnd.ms-excel'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='Synthese_PEAC.xls';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
     }
   </script>
 </body>
