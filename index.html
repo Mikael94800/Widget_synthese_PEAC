@@ -284,7 +284,7 @@
       </tbody>
     </table>
   </div>
-  <div class="toolbar"><button class="action-btn" type="button" onclick="exportWorkbook()">Exporter la synthèse Excel</button><button class="action-btn" type="button" onclick="printAnnualReport()">Éditer le rapport annuel PDF</button></div><div class="status-note" id="data-status">Chargement des données Grist…</div>
+  <div class="toolbar"><button class="action-btn" type="button" onclick="exportWorkbook()">Exporter la synthèse Excel</button><button class="action-btn" type="button" onclick="exportAnnualWord()">Exporter la synthèse annuelle Word</button></div><div class="status-note" id="data-status">Chargement des données Grist…</div>
   <div class="modal-backdrop" id="detail-modal" onclick="if(event.target===this)closeDetail()">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="detail-title">
       <div class="modal-head"><h2 id="detail-title">Parcours attribués</h2><button class="modal-close" onclick="closeDetail()">Fermer ✕</button></div>
@@ -295,6 +295,8 @@
   <script>
     let ecolesRecords = [];
     let voeuxMap = {};
+    let voeuxRecords = [];
+    let parcoursRecords = [];
     let parcoursMap = {};
     let parcoursById = {};
     let disciplinesByRef = {};
@@ -327,6 +329,7 @@
       }
       try {
         const voeuxRows = await grist.docApi.fetchTable('Table_voeux');
+        voeuxRecords = tableToRecords(voeuxRows);
         voeuxMap = {};
         if (voeuxRows && voeuxRows.CodeParcours) for (let i=0;i<voeuxRows.CodeParcours.length;i++) {
           const code=String(voeuxRows.CodeParcours[i]??'').trim(); if(code) { const partner=String(voeuxRows.Partenaire?.[i]??'').trim(); (voeuxMap[code] ||= new Set()); if(partner) voeuxMap[code].add(partner); }
@@ -334,6 +337,7 @@
       } catch(e) { console.warn('Table_voeux non disponible',e); }
       try {
         const rows=await grist.docApi.fetchTable('Table_parcours');
+        parcoursRecords = tableToRecords(rows);
         parcoursMap={}; parcoursById={}; disciplinesByRef={};
         const ids=rows.id || rows.ID || [];
         for(let i=0;i<(rows.NomParcours||[]).length;i++) {
@@ -517,44 +521,97 @@
     function closeDetail(){document.getElementById('detail-modal').classList.remove('open');}
     function xmlEsc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
     function excelCell(v){return `<Cell><Data ss:Type="${typeof v==='number'&&Number.isFinite(v)?'Number':'String'}">${xmlEsc(v)}</Data></Cell>`;}
+    function xmlEsc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+    function normalizeKey(v){return String(v??'').trim().toLocaleLowerCase('fr').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');}
+    function wishDataForRow(r){
+      const out={}; const raw=String(r.Voeux||r.VoeuxExprimes||r.Voeux_exprimes||'').trim();
+      const re=/(?:^|\|\s*)(\d+)\s*[:.)-]\s*(\d+)/g;let m;
+      while((m=re.exec(raw))!==null)out[String(m[2])]=Number(m[1]);
+      const teacher=normalizeKey(r.Enseignant||r.NomEnseignant||r.Professeur||r.Classe||r.NomClasse),school=normalizeKey(r.Ecole||r.École);
+      (voeuxRecords||[]).forEach(v=>{const vt=normalizeKey(v.Enseignant||v.NomEnseignant||v.Professeur||v.Classe||v.NomClasse||v.Nom),vs=normalizeKey(v.Ecole||v.École||v.Structure);if(!teacher||vt!==teacher||(vs&&school&&vs!==school))return;const c=String(v.CodeParcours??v.Code??v.Code_parcours??'').trim(),rank=Number(v.RangVoeu??v.Rang??v.OrdreVoeu??v.Ordre??v.NumeroVoeu??v.NumVoeu??v.Priorite??v.Priorité);if(c&&Number.isFinite(rank)&&rank>0)out[c]=rank;});
+      return out;
+    }
+    function excelCell(v,style){
+      const item=v&&typeof v==='object'&&Object.prototype.hasOwnProperty.call(v,'v')?v:{v,s:style};
+      const value=item.v,sty=item.s||style||'',type=typeof value==='number'&&Number.isFinite(value)?'Number':'String';
+      return `<Cell${sty?` ss:StyleID="${sty}"`:''}><Data ss:Type="${type}">${xmlEsc(value)}</Data></Cell>`;
+    }
     function exportWorkbook(){
-      // Le classeur reprend la logique des six onglets du fichier Attribution fourni.
-      const year=document.getElementById('filter-annee').value||'';
-      const yearRows=ecolesRecords.filter(r=>String(r.AnneeScolaire||'').trim()===year);
-      const assigned=yearRows.filter(hasAssignedCode);
-      const cost=assigned.reduce((a,r)=>a+numericCost(r.CoutParcours),0);
-      const noAssigned=yearRows.filter(r=>!hasAssignedCode(r)).length;
-      const rowsAttributions=[['Cycle','École','Niveau','Classe / enseignant','Effectif classe','Code attribué','Parcours attribué','Partenaire','Coût estimé (€)','Vœux exprimés']];
-      yearRows.forEach(r=>{const code=String(r.CodeParcours??'').trim();const partners=voeuxMap[code]?[...voeuxMap[code]].join(' / '):'';rowsAttributions.push([r.Cycle||'',r.Ecole||'',extractValues(r.Niveau).join(', '),r.Classe||r.Enseignant||'',numericCost(r.EffectifsClasse),code,r.NomParcours||'',partners,numericCost(r.CoutParcours),r.Voeux||r.VoeuxExprimes||'']);});
+      const year=document.getElementById('filter-annee').value||'',yearRows=ecolesRecords.filter(r=>String(r.AnneeScolaire||'').trim()===year);
+      if(!yearRows.length){alert('Aucune donnée à exporter pour cette année scolaire.');return;}
+      const assigned=yearRows.filter(hasAssignedCode),cost=assigned.reduce((a,r)=>a+numericCost(r.CoutParcours),0);
+      const rowsAttributions=[['Cycle','École','Niveau','Enseignant','Effectif classe','Code attribué','Parcours attribué','Partenaire','Coût estimé (€)','Vœux exprimés']];
+      yearRows.forEach(r=>{const c=String(r.CodeParcours??'').trim();rowsAttributions.push([r.Cycle||'',r.Ecole||'',extractValues(r.Niveau).join(', '),r.Enseignant||r.Classe||'Enseignant non renseigné',numericCost(r.EffectifsClasse),c,r.NomParcours||'',voeuxMap[c]?[...voeuxMap[c]].join(' / '):'',numericCost(r.CoutParcours),r.Voeux||r.VoeuxExprimes||'']);});
       const group={};yearRows.forEach(r=>{const k=`${r.Ecole||'École non renseignée'} (${r.Cycle||'Cycle non renseigné'})`;group[k]??={classes:0,eleves:0,eac:0,cost:0,mus:0,cin:0,cho:0,cham:0};const g=group[k];g.classes++;g.eleves+=numericCost(r.EffectifsClasse);if(hasAssignedCode(r)){g.eac++;g.cost+=numericCost(r.CoutParcours);}if(dispositif(r,'PasseportMusique'))g.mus++;if(dispositif(r,'Ecole_Cinema'))g.cin++;if(dispositif(r,'Chorale_CRR93'))g.cho++;if(dispositif(r,'Sensibilisation_CHAM_CHAT'))g.cham++;});
-      const summary=[['Indicateur','Résultat','Règle / commentaire'],['Année scolaire',year,'Année sélectionnée dans le widget'],['Classes ayant reçu un parcours',assigned.length,'Nombre de lignes de classe avec CodeParcours renseigné'],['Classes sans attribution',noAssigned,'Sur les lignes de Table_ecoles pour l’année sélectionnée'],['Coût prévisionnel total (€)',cost,'Somme de CoutParcours pour les lignes attribuées'],['Élèves dans les classes attribuées',assigned.reduce((a,r)=>a+numericCost(r.EffectifsClasse),0),'Somme des EffectifsClasse des classes attribuées'],['Écoles / cycles',Object.keys(group).length,'Groupes école et cycle distincts'],['Note','Les vœux et rangs détaillés ne sont ajoutés que si les champs correspondants sont présents dans Table_ecoles ou Table_voeux.','']];
-      const detail=[['Cycle','Code','Parcours','Discipline','Partenaire(s)','Nb attribué','Coût unitaire / classe (€)','Coût total (€)']];
-      const byCode={};assigned.forEach(r=>{const c=String(r.CodeParcours);byCode[c]??={cycle:r.Cycle||'',code:c,name:r.NomParcours||'',disc:new Set(),partners:new Set(),n:0,cost:0};const x=byCode[c];getDisciplines(r).forEach(d=>x.disc.add(d));if(voeuxMap[c])voeuxMap[c].forEach(p=>x.partners.add(p));x.n++;x.cost+=numericCost(r.CoutParcours);});
-      Object.values(byCode).sort((a,b)=>a.cycle.localeCompare(b.cycle,'fr')||a.code.localeCompare(b.code,'fr', {numeric:true})).forEach(x=>detail.push([x.cycle,x.code,x.name,[...x.disc].join(', '),[...x.partners].join(' / '),x.n,x.n?x.cost/x.n:0,x.cost]));
+      const summary=[['Indicateur','Résultat','Règle / commentaire'],['Année scolaire',year,'Année sélectionnée'],['Classes avec parcours EAC',assigned.length,'Nombre de classes attribuées'],['Classes sans attribution',yearRows.length-assigned.length,'Nombre de classes sans parcours'],['Coût prévisionnel total (€)',cost,'Somme de CoutParcours'],['Élèves dans les classes attribuées',assigned.reduce((a,r)=>a+numericCost(r.EffectifsClasse),0),'Effectifs des classes attribuées'],['Écoles / cycles',Object.keys(group).length,'Groupes école et cycle']];
+      const detail=[['Cycle','Code','Parcours','Discipline','Partenaire(s)','Nb attribué','Coût moyen / classe (€)','Coût total (€)']],byCode={};
+      assigned.forEach(r=>{const c=String(r.CodeParcours);byCode[c]??={cycle:r.Cycle||'',code:c,name:r.NomParcours||'',disc:new Set(),partners:new Set(),n:0,cost:0};const x=byCode[c];getDisciplines(r).forEach(d=>x.disc.add(d));if(voeuxMap[c])voeuxMap[c].forEach(p=>x.partners.add(p));x.n++;x.cost+=numericCost(r.CoutParcours);});
+      Object.values(byCode).sort((a,b)=>a.cycle.localeCompare(b.cycle,'fr')||a.code.localeCompare(b.code,'fr',{numeric:true})).forEach(x=>detail.push([x.cycle,x.code,x.name,[...x.disc].join(', '),[...x.partners].join(' / '),x.n,x.cost/x.n,x.cost]));
       const schoolSheet=[['École & Cycle','Classes','Élèves','Parcours attribués','Budget (€)','Passeport Musique','École & Cinéma','Chorale CRR93','CHAM/CHAT'],...Object.entries(group).sort().map(([k,g])=>[k,g.classes,g.eleves,g.eac,g.cost,g.mus,g.cin,g.cho,g.cham])];
-      const devices=[['École & Cycle','Classe','Niveau','Parcours EAC','Chorale CRR93','Passeport Musique','Sensibilisation CHAM/CHAT','École & Cinéma']];
-      yearRows.forEach(r=>devices.push([`${r.Ecole||''} (${r.Cycle||''})`,r.Classe||r.Enseignant||'',extractValues(r.Niveau).join(', '),r.NomParcours||'',dispositif(r,'Chorale_CRR93')?'Oui':'—',dispositif(r,'PasseportMusique')?'Oui':'—',dispositif(r,'Sensibilisation_CHAM_CHAT')?'Oui':'—',dispositif(r,'Ecole_Cinema')?'Oui':'—']));
-      const method=[['Sujet','Hypothèse / commentaire'],['Source','Table_ecoles ; année scolaire sélectionnée'],['Coût','CoutParcours, colonne numérique de Table_ecoles'],['Discipline','Références TypeParcours rapprochées de Table_parcours'],['Vœux / rangs','Non reconstitués si la relation entre réponses et classes n’est pas univoque'],['Limite','Le classeur reproduit la structure des six onglets du modèle Attribution ; les matrices de vœux colorées ne peuvent être reconstituées que si les vœux individuels sont disponibles et reliés à chaque classe.']];
-      function matrixSheet(kind){const re=kind==='EE'?/élémentaire|elementaire|^ee$/i:/maternelle|^em$/i;const subset=yearRows.filter(r=>re.test(String(r.Cycle||'')));const parcours=[...new Map(subset.filter(hasAssignedCode).map(r=>[String(r.CodeParcours),{code:String(r.CodeParcours),name:r.NomParcours||('Parcours '+r.CodeParcours)}])).values()].sort((a,b)=>a.code.localeCompare(b.code,'fr',{numeric:true}));const head=['École','Classe / enseignant','Niveau','Effectif','Code attribué',...parcours.map(p=>p.code+' — '+p.name)];const data=[head];subset.forEach(r=>{const code=String(r.CodeParcours??'');data.push([r.Ecole||'',r.Classe||r.NomClasse||r.Enseignant||extractValues(r.Niveau).join(', '),extractValues(r.Niveau).join(', '),numericCost(r.EffectifsClasse),code,...parcours.map(p=>p.code===code?'ATTRIBUÉ':'')]);});return data;}
-      const sheets=[['Synthèse',summary],['Attributions',rowsAttributions],['Détail parcours',detail],['Élémentaire',matrixSheet('EE')],['Maternelle',matrixSheet('EM')],['Méthode et réserves',method]];
-      const styles='<Styles><Style ss:ID="Default" ss:Name="Normal"><Alignment ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10"/></Style><Style ss:ID="Title"><Font ss:Bold="1" ss:Size="15" ss:Color="#FFFFFF"/><Interior ss:Color="#1A365D" ss:Pattern="Solid"/></Style><Style ss:ID="Header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#2B6CB0" ss:Pattern="Solid"/><Alignment ss:WrapText="1" ss:Vertical="Center"/></Style></Styles>';
-      const workbook='<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'+styles+sheets.map(([name,data])=>`<Worksheet ss:Name="${xmlEsc(name)}"><Table>${data.map((row,i)=>'<Row>'+row.map(v=>`<Cell${i===0?' ss:StyleID="Header"':''}><Data ss:Type="${typeof v==='number'&&Number.isFinite(v)?'Number':'String'}">${xmlEsc(v)}</Data></Cell>`).join('')+'</Row>').join('')}</Table></Worksheet>`).join('')+'</Workbook>';
+      const devices=[['École & Cycle','Enseignant','Niveau','Dispositifs']];
+      yearRows.forEach(r=>devices.push([`${r.Ecole||''} (${r.Cycle||''})`,r.Enseignant||r.Classe||'Enseignant non renseigné',extractValues(r.Niveau).join(', '),[`Parcours EAC : ${hasAssignedCode(r)?(r.NomParcours||'Attribué'):'—'}`,`Chorale CRR93 : ${dispositif(r,'Chorale_CRR93')?'Oui':'—'}`,`Passeport Musique : ${dispositif(r,'PasseportMusique')?'Oui':'—'}`,`Sensibilisation CHAM/CHAT : ${dispositif(r,'Sensibilisation_CHAM_CHAT')?'Oui':'—'}`,`École & Cinéma : ${dispositif(r,'Ecole_Cinema')?'Oui':'—'}`].join(' | ')]));
+      function matrixSheet(kind){
+        const re=kind==='EE'?/élémentaire|elementaire|^ee$/i:/maternelle|^em$/i,subset=yearRows.filter(r=>re.test(String(r.Cycle||''))),wish=subset.map(wishDataForRow),codes=new Set();
+        wish.forEach(w=>Object.keys(w).forEach(c=>codes.add(c)));subset.filter(hasAssignedCode).forEach(r=>codes.add(String(r.CodeParcours)));
+        const codeList=[...codes].sort((a,b)=>a.localeCompare(b,'fr',{numeric:true})),names={};
+        subset.forEach(r=>{if(hasAssignedCode(r)&&r.NomParcours)names[String(r.CodeParcours)]=r.NomParcours;});
+        voeuxRecords.forEach(v=>{const c=String(v.CodeParcours??v.Code??'').trim(),n=String(v.NomParcours??v.Parcours??v.LibelleParcours??'').trim();if(c&&n&&!names[c])names[c]=n;});
+        parcoursRecords.forEach(v=>{const c=String(v.CodeParcours??v.Code??v.Code_parcours??'').trim(),n=String(v.NomParcours??v.Parcours??v.LibelleParcours??'').trim();if(c&&n&&!names[c])names[c]=n;});
+        const data=[['École','Enseignant','Niveau','Effectif','Code attribué',...codeList.map(c=>`${c} — ${names[c]||'Parcours '+c}`)]];
+        subset.forEach((r,i)=>{const noWish=!Object.keys(wish[i]).length,teacher=r.Enseignant||r.Classe||r.NomClasse||'Enseignant non renseigné';
+          const row=[r.Ecole||'École non renseignée',teacher,extractValues(r.Niveau).join(', '),numericCost(r.EffectifsClasse),String(r.CodeParcours??'')].map(v=>noWish?{v,s:'NoWish'}:v);
+          codeList.forEach(c=>{const isAssigned=hasAssignedCode(r)&&String(r.CodeParcours)===c,rank=wish[i][c];row.push(isAssigned?{v:'Attribué',s:'Assigned'}:rank?{v:rank,s:rank===1?'Wish1':rank===2?'Wish2':rank===3?'Wish3':rank===4?'Wish4':'Wish5'}:'');});data.push(row);
+        });return data;
+      }
+      const sheets=[['Synthèse',summary],['Attributions',rowsAttributions],['Détail parcours',detail],['Élémentaire',matrixSheet('EE')],['Maternelle',matrixSheet('EM')],['Méthode et réserves',[['Sujet','Hypothèse / commentaire'],['Source','Table_ecoles ; année sélectionnée'],['Vœux individuels','Champs Voeux/VoeuxExprimes ou lignes de Table_voeux si reliées à l’enseignant'],['Code couleur','Vœu 1 jaune ; 2 bleu ; 3 violet ; 4 orange ; 5 et suivants vert ; attribué noir et blanc'],['Sans vœu','Ligne jaune lorsque aucun vœu n’est identifié']]]];
+      const styles='<Styles><Style ss:ID="Default" ss:Name="Normal"><Alignment ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10"/></Style><Style ss:ID="Header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#24476B" ss:Pattern="Solid"/><Alignment ss:WrapText="1" ss:Vertical="Center"/></Style><Style ss:ID="NoWish"><Interior ss:Color="#FFF2CC" ss:Pattern="Solid"/></Style><Style ss:ID="Wish1"><Interior ss:Color="#FFE699" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style><Style ss:ID="Wish2"><Interior ss:Color="#9DC3E6" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style><Style ss:ID="Wish3"><Interior ss:Color="#C9B2E8" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style><Style ss:ID="Wish4"><Interior ss:Color="#F4B183" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style><Style ss:ID="Wish5"><Interior ss:Color="#A9D18E" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style><Style ss:ID="Assigned"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#000000" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style></Styles>';
+      const workbook='<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'+styles+sheets.map(([name,data])=>`<Worksheet ss:Name="${xmlEsc(name)}"><Table>${(data[0]||[]).map((h,i)=>`<Column ss:Width="${name==='Élémentaire'||name==='Maternelle'?([25,25,14,10,12][i]||34):Math.max(14,Math.min(45,String(h).length*1.2+4))}"/>`).join('')}${data.map((row,i)=>'<Row ss:AutoFitHeight="1">'+row.map(v=>excelCell(v,i===0?'Header':undefined)).join('')+'</Row>').join('')}</Table><WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><PageSetup><Layout x:Orientation="${name==='Élémentaire'||name==='Maternelle'?'Landscape':'Portrait'}"/></PageSetup><FreezePanes/><FrozenNoSplit/><SplitHorizontal>1</SplitHorizontal><TopRowBottomPane>1</TopRowBottomPane><ActivePane>2</ActivePane></WorksheetOptions></Worksheet>`).join('')+'</Workbook>';
       const blob=new Blob([workbook],{type:'application/vnd.ms-excel'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`Attributions_PEAC_${year.replace('/','-')||'annee'}.xls`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);
     }
-
     function dispositif(r,key){const v=r[key];if(v===null||v===undefined||v===''||v===false||v===0||v==='0'||String(v).toLowerCase()==='false')return false;if(typeof v==='number')return v>0;if(Array.isArray(v))return v.length>0;return true;}
-    function printAnnualReport(){
-      const year=document.getElementById('filter-annee').value||'';
-      // Le PDF ignore volontairement les filtres école/cycle/niveau/disciplines : toutes les écoles et tous les cycles de l'année sont inclus.
-      const rows=ecolesRecords.filter(r=>String(r.AnneeScolaire||'').trim()===year);
+    function exportAnnualWord(){
+      const year=document.getElementById('filter-annee').value||'',rows=ecolesRecords.filter(r=>String(r.AnneeScolaire||'').trim()===year);
       if(!rows.length){alert('Aucune donnée trouvée dans Table_ecoles pour cette année scolaire.');return;}
-      const groups={};rows.forEach(r=>{const school=String(r.Ecole||'École non renseignée').trim(),cycle=String(r.Cycle||'Cycle non renseigné').trim(),key=school+' — '+cycle;(groups[key]??=[]).push(r);});
-      const entries=Object.entries(groups).sort(([a],[b])=>a.localeCompare(b,'fr'));
-      const esc=escapeHtml;
-      const toc=entries.map(([k],i)=>`<li><a href="#ecole-${i+1}">${esc(k)}</a><span>${i+3}</span></li>`).join('');
-      const pages=entries.map(([k,rs],i)=>{const trs=rs.slice().sort((a,b)=>extractValues(a.Niveau).join(',').localeCompare(extractValues(b.Niveau).join(','),'fr')||String(a.Classe||a.Enseignant||'').localeCompare(String(b.Classe||b.Enseignant||''),'fr')).map(r=>{const cls=r.Classe||r.NomClasse||r.Enseignant||extractValues(r.Niveau).join(', ')||'Classe non renseignée';const eac=hasAssignedCode(r)?(r.NomParcours||('Code '+r.CodeParcours)):'—';return `<tr><td>${esc(cls)}</td><td>${esc(extractValues(r.Niveau).join(', ')||'—')}</td><td>${esc(eac)}</td><td>${dispositif(r,'Chorale_CRR93')?'Oui':'—'}</td><td>${dispositif(r,'PasseportMusique')?'Oui':'—'}</td><td>${dispositif(r,'Sensibilisation_CHAM_CHAT')?'Oui':'—'}</td><td>${dispositif(r,'Ecole_Cinema')?'Oui':'—'}</td></tr>`;}).join('');const count={eac:rs.filter(hasAssignedCode).length,cho:rs.filter(r=>dispositif(r,'Chorale_CRR93')).length,mus:rs.filter(r=>dispositif(r,'PasseportMusique')).length,cham:rs.filter(r=>dispositif(r,'Sensibilisation_CHAM_CHAT')).length,cin:rs.filter(r=>dispositif(r,'Ecole_Cinema')).length};return `<section class="school-page" id="ecole-${i+1}"><h2>${esc(k)}</h2><p class="page-sub">${rs.length} classes recensées · ${rs.reduce((a,r)=>a+numericCost(r.EffectifsClasse),0)} élèves</p><table><thead><tr><th>Classe / enseignant</th><th>Niveau</th><th>Parcours EAC</th><th>Chorale CRR93</th><th>Passeport Musique</th><th>Sensibilisation CHAM/CHAT</th><th>École & Cinéma</th></tr></thead><tbody>${trs}</tbody></table><div class="totals"><b>Dispositifs déployés dans ce cycle :</b> Parcours EAC : ${count.eac} classes · Chorale : ${count.cho} · Passeport Musique : ${count.mus} · CHAM/CHAT : ${count.cham} · École & Cinéma : ${count.cin}</div></section>`;}).join('');
-      const html=`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Synthèse des dispositifs ${esc(year)}</title><style>@page{size:A4 landscape;margin:14mm 12mm 16mm;@bottom-right{content:'Page ' counter(page);font:9pt Arial;color:#64748b}}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#243247;margin:0;font-size:10pt}.cover{page-break-after:always;padding:18mm 8mm}.cover h1{font-size:26pt;color:#1A365D;margin:0 0 10mm}.cover h2{font-size:16pt}.toc{page-break-after:always}.toc h2{color:#1A365D}.toc ol{padding-left:22px}.toc li{display:flex;justify-content:space-between;border-bottom:1px dotted #9aa8b8;padding:7px 0}.toc a{color:#1A365D;text-decoration:none}.school-page{page-break-after:always;break-after:page}.school-page:last-child{page-break-after:auto}.school-page h2{font-size:18pt;color:#1A365D;margin:0 0 3mm}.page-sub{color:#64748b;margin:0 0 7mm}table{width:100%;border-collapse:collapse;table-layout:fixed}th{background:#1A365D;color:white;font-size:8pt;padding:7px 5px;text-align:left}td{border:1px solid #cbd5e1;padding:7px 5px;vertical-align:top;overflow-wrap:anywhere;font-size:8.5pt}tbody tr:nth-child(even){background:#f1f5f9}.totals{margin-top:8mm;padding:8px;background:#eaf0f7;border-left:4px solid #319795;font-size:9pt}.print-note{color:#64748b;font-size:9pt;margin-top:12mm}@media screen{body{padding:20px}.cover,.toc,.school-page{background:#fff;margin:0 auto 18px;padding:25px;max-width:1100px;box-shadow:0 2px 12px #0002}.school-page{min-height:650px}}</style></head><body><section class="cover"><h1>Synthèse des dispositifs déployés</h1><h2>Année scolaire ${esc(year)}</h2><p>Écoles et classes — parcours d'éducation artistique et culturelle et dispositifs associés</p><p class="print-note">Document généré à partir des données de la table Table_ecoles dans Grist.</p></section><section class="toc"><h2>Sommaire</h2><ol>${toc}</ol></section>${pages}<script>window.onload=()=>{setTimeout(()=>window.print(),500)};<\/script></body></html>`;
-      const win=window.open('','_blank');if(!win){alert('La fenêtre du rapport a été bloquée. Autorise les fenêtres contextuelles pour ce widget puis réessaie.');return;}win.document.open();win.document.write(html);win.document.close();
+      const groups={};rows.forEach(r=>{const key=`${r.Ecole||'École non renseignée'} — ${r.Cycle||'Cycle non renseigné'}`;(groups[key]??=[]).push(r);});
+      const entries=Object.entries(groups).sort(([a],[b])=>a.localeCompare(b,'fr')),items=[];
+      entries.forEach(([key,rs])=>{items.push({type:'heading',text:key});rs.slice().sort((a,b)=>String(a.Enseignant||a.Classe||'').localeCompare(String(b.Enseignant||b.Classe||''),'fr')).forEach(r=>items.push({type:'row',teacher:r.Enseignant||r.Classe||r.NomClasse||'Enseignant non renseigné',effectif:numericCost(r.EffectifsClasse),items:[`Niveau : ${extractValues(r.Niveau).join(', ')||'non renseigné'}`,`Parcours EAC : ${hasAssignedCode(r)?(r.NomParcours||('Code '+r.CodeParcours)):'Aucun parcours attribué'}`,`Chorale CRR93 : ${dispositif(r,'Chorale_CRR93')?'Oui':'Non'}`,`Passeport Musique : ${dispositif(r,'PasseportMusique')?'Oui':'Non'}`,`Sensibilisation CHAM/CHAT : ${dispositif(r,'Sensibilisation_CHAM_CHAT')?'Oui':'Non'}`,`École & Cinéma : ${dispositif(r,'Ecole_Cinema')?'Oui':'Non'}`]}));});
+      const files=makeWordFiles(year,entries.length,rows.length,rows.filter(hasAssignedCode).length,items);
+      const blob=new Blob([makeStoredZip(files)],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`Synthese_dispositifs_PEAC_${year.replace('/','-')||'annee'}.docx`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+    }
+    function makeWordFiles(year,schoolCount,classCount,eacCount,items){
+      const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const run=(v,bold=false)=>`<w:r><w:rPr>${bold?'<w:b/>':''}<w:rFonts w:ascii="Aptos" w:hAnsi="Aptos"/></w:rPr><w:t xml:space="preserve">${esc(v)}</w:t></w:r>`;
+      const p=(v,style='Normal',bold=false)=>`<w:p><w:pPr><w:pStyle w:val="${style}"/></w:pPr>${run(v,bold)}</w:p>`;
+      const tc=(content,width,shade)=>`<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/><w:shd w:fill="${shade}"/><w:vAlign w:val="center"/></w:tcPr>${content}</w:tc>`;
+      const borders='<w:tblBorders><w:top w:val="single" w:sz="5" w:color="D7E0EA"/><w:left w:val="single" w:sz="5" w:color="D7E0EA"/><w:bottom w:val="single" w:sz="5" w:color="D7E0EA"/><w:right w:val="single" w:sz="5" w:color="D7E0EA"/><w:insideH w:val="single" w:sz="4" w:color="E4EAF0"/><w:insideV w:val="single" w:sz="4" w:color="E4EAF0"/></w:tblBorders>';
+      let content=p('SYNTHÈSE DES DISPOSITIFS DÉPLOYÉS','Title',true)+p(`Année scolaire ${year}`,'Subtitle')+p('Bilan des parcours d’éducation artistique et culturelle et des dispositifs associés.','Intro')+p(`${schoolCount} groupes école / cycle  ·  ${classCount} classes recensées  ·  ${eacCount} parcours EAC attribués`,'Kpi');
+      let openTable=false,shadeIndex=0;
+      const closeTable=()=>{if(openTable){content+='</w:tbl>';openTable=false;}};
+      items.forEach((it,i)=>{
+        if(it.type==='heading'){
+          closeTable();
+          content+=`<w:p><w:pPr><w:pStyle w:val="Heading1"/>${i?'<w:pageBreakBefore/>':''}</w:pPr>${run(it.text,true)}</w:p>`;
+          content+=`<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/>${borders}<w:tblCellMar><w:top w:w="65" w:type="dxa"/><w:start w:w="100" w:type="dxa"/><w:bottom w:w="65" w:type="dxa"/><w:end w:w="100" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="2600"/><w:gridCol w:w="7400"/></w:tblGrid><w:tr>${tc(p('ENSEIGNANT / CLASSE','Teacher',true),2600,'24476B')}${tc(p('DISPOSITIFS ET INFORMATIONS','Teacher',true),7400,'24476B')}</w:tr>`;
+          openTable=true;shadeIndex=0;return;
+        }
+        const info=it.items.map(v=>`<w:p><w:pPr><w:spacing w:after="25"/></w:pPr>${run(v,v.startsWith('Parcours EAC :')&&v.indexOf('Aucun')<0)}</w:p>`).join('');
+        content+=`<w:tr>${tc(p(it.teacher,'Teacher',true)+p(`${it.effectif} élèves`,'SmallNote'),2600,shadeIndex%2?'F2F5F8':'FFFFFF')}${tc(info,7400,shadeIndex%2?'F2F5F8':'FFFFFF')}</w:tr>`;
+        shadeIndex++;
+      });
+      closeTable();
+      const documentXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${content}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1050" w:right="850" w:bottom="1050" w:left="850"/></w:sectPr></w:body></w:document>`;
+      const styles=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos"/><w:sz w:val="20"/></w:rPr></w:rPrDefault></w:docDefaults><w:style w:type="paragraph" w:styleId="Normal"><w:name w:val="Normal"/></w:style><w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:rPr><w:b/><w:color w:val="17365D"/><w:sz w:val="40"/></w:rPr><w:pPr><w:spacing w:before="500" w:after="220"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="Subtitle"><w:name w:val="Subtitle"/><w:rPr><w:color w:val="526A83"/><w:sz w:val="30"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Intro"><w:name w:val="Intro"/><w:rPr><w:color w:val="526273"/><w:sz w:val="21"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Kpi"><w:name w:val="Kpi"/><w:rPr><w:b/><w:color w:val="177E89"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:pPr><w:keepNext/><w:spacing w:before="260" w:after="100"/></w:pPr><w:rPr><w:b/><w:color w:val="17365D"/><w:sz w:val="28"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="SmallNote"><w:name w:val="Small note"/><w:rPr><w:color w:val="65758B"/><w:sz w:val="17"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Teacher"><w:name w:val="Teacher"/><w:rPr><w:b/><w:color w:val="17365D"/></w:rPr></w:style></w:styles>`;
+      const types=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>`;
+      const rel=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`;
+      const docRel=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
+      return [['[Content_Types].xml',types],['_rels/.rels',rel],['word/document.xml',documentXml],['word/styles.xml',styles],['word/_rels/document.xml.rels',docRel]];
+    }
+    function makeStoredZip(files){
+      const enc=new TextEncoder(),local=[],central=[];let offset=0;
+      const crc32=d=>{let c=0xffffffff;for(let i=0;i<d.length;i++){c^=d[i];for(let j=0;j<8;j++)c=(c>>>1)^((c&1)?0xedb88320:0);}return(c^0xffffffff)>>>0;};
+      const u16=n=>[n&255,(n>>>8)&255],u32=n=>[n&255,(n>>>8)&255,(n>>>16)&255,(n>>>24)&255];
+      files.forEach(([name,content])=>{const nb=enc.encode(name),d=enc.encode(content),crc=crc32(d);const l=new Uint8Array([...u32(0x04034b50),...u16(20),...u16(0),...u16(0),...u16(0),...u16(0),...u32(crc),...u32(d.length),...u32(d.length),...u16(nb.length),...u16(0),...nb,...d]);local.push(l);const c=new Uint8Array([...u32(0x02014b50),...u16(20),...u16(20),...u16(0),...u16(0),...u16(0),...u16(0),...u32(crc),...u32(d.length),...u32(d.length),...u16(nb.length),...u16(0),...u16(0),...u16(0),...u16(0),...u32(0),...u32(offset),...nb]);central.push(c);offset+=l.length;});
+      const cs=central.reduce((a,b)=>a+b.length,0),end=new Uint8Array([...u32(0x06054b50),...u16(0),...u16(0),...u16(files.length),...u16(files.length),...u32(cs),...u32(offset),...u16(0)]),out=new Uint8Array(offset+cs+end.length);let p=0;local.forEach(b=>{out.set(b,p);p+=b.length;});central.forEach(b=>{out.set(b,p);p+=b.length;});out.set(end,p);return out;
     }
 
   </script>
