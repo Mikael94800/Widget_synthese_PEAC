@@ -73,17 +73,19 @@
       color: var(--text);
     }
 
-    /* Style spécifique pour le select multiple des niveaux */
-    select[multiple] {
-      height: 75px;
-      background-color: #FFF;
-    }
-
-    .hint-text {
-      font-size: 0.65rem;
-      color: #a0aec0;
-      margin-top: 2px;
-    }
+    /* Sélecteur de classes sous forme de liste à cocher */
+    .class-filter { position: relative; min-width: 220px; flex: 1.4; }
+    .class-filter label { display: block; font-size: 0.7rem; font-weight: bold; color: #718096; text-transform: uppercase; margin-bottom: 4px; }
+    .class-filter-toggle { width: 100%; text-align: left; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px; background: #fff; color: var(--text); font-size: .85rem; cursor: pointer; }
+    .class-filter-panel { display: none; position: absolute; z-index: 20; top: 100%; left: 0; width: min(340px, 90vw); max-height: 340px; overflow: auto; padding: 10px; background: #fff; border: 1px solid var(--border); border-radius: 7px; box-shadow: 0 5px 18px rgba(0,0,0,.14); }
+    .class-filter-panel.open { display: block; }
+    .class-filter-actions { display: flex; gap: 6px; margin: 7px 0; }
+    .class-filter-actions button { padding: 5px 8px; border: 1px solid var(--border); border-radius: 5px; background: #f7fafc; cursor: pointer; font-size: .75rem; }
+    .class-filter-search { width: 100%; box-sizing: border-box; padding: 6px; border: 1px solid var(--border); border-radius: 5px; margin-bottom: 6px; }
+    .class-filter-list label { display: flex; align-items: center; gap: 7px; padding: 4px 2px; font-size: .8rem; text-transform: none; font-weight: normal; color: var(--text); }
+    .class-filter-list input { margin: 0; }
+    .class-filter-list .group-title { font-weight: bold; color: #4a5568; padding: 7px 2px 3px; border-top: 1px solid #edf2f7; margin-top: 4px; }
+    .hint-text { font-size: 0.65rem; color: #a0aec0; margin-top: 2px; }
 
     /* CARTES KPI */
     .kpi-grid {
@@ -192,10 +194,17 @@
       <label for="filter-cycle">Cycle</label>
       <select id="filter-cycle" onchange="updateDashboard()"><option value="ALL">Tous</option></select>
     </div>
-    <div class="filter-group">
-      <label for="filter-niveau">Niveau (Multisélection)</label>
-      <select id="filter-niveau" multiple onchange="updateDashboard()"></select>
-      <span class="hint-text">Maintenez Ctrl (ou Cmd) pour en sélectionner plusieurs</span>
+    <div class="class-filter" id="class-filter">
+      <label>Classes</label>
+      <button type="button" class="class-filter-toggle" id="class-filter-toggle" onclick="toggleClassFilter()">Toutes les classes</button>
+      <div class="class-filter-panel" id="class-filter-panel">
+        <input class="class-filter-search" id="class-filter-search" type="search" placeholder="Rechercher une classe…" oninput="renderClassChecklist()">
+        <div class="class-filter-actions">
+          <button type="button" onclick="selectAllClasses(true)">Tout sélectionner</button>
+          <button type="button" onclick="selectAllClasses(false)">Tout désélectionner</button>
+        </div>
+        <div class="class-filter-list" id="class-filter-list"></div>
+      </div>
     </div>
     <div class="filter-group">
       <label for="filter-discipline">Champ Disciplinaire</label>
@@ -243,7 +252,7 @@
     <table>
       <thead>
         <tr>
-          <th>École & Cycle</th>
+          <th>École & Type</th>
           <th>Classes</th>
           <th>Élèves</th>
           <th>Parcours EAC</th>
@@ -262,99 +271,145 @@
 
   <script>
     let ecolesRecords = [];
-    let voeuxMap = {};     
-    let parcoursMap = {};  
-    let relatedTablesLoaded = false;
-    let relatedTablesPromise = null;
+    let voeuxMap = {};
+    let parcoursMap = {};
+    let classOptions = [];
+    let selectedClassKeys = new Set();
+    let disciplineByParcours = {};
 
     grist.ready({ requiredAccess: 'full' });
 
-    grist.onRecords(async function(records) {
-      ecolesRecords = records || [];
-      await fetchRelatedTables();
-      populateFilters(ecolesRecords);
+    grist.onRecords(function(records) {
+      ecolesRecords = records;
+      fetchRelatedTables();
     });
 
-    // Les tables de référence sont chargées une seule fois. Les actualisations
-    // de Table_ecoles ne déclenchent donc plus de nouveaux appels réseau.
     async function fetchRelatedTables() {
-      if (relatedTablesLoaded) return;
-      if (relatedTablesPromise) return relatedTablesPromise;
-      relatedTablesPromise = (async () => {
-        try {
-          const voeuxRows = await grist.docApi.fetchTable('Table_voeux');
-          voeuxMap = {};
-          if (voeuxRows && voeuxRows.CodeParcours) {
-            for (let i = 0; i < voeuxRows.CodeParcours.length; i++) {
-              const code = String(voeuxRows.CodeParcours[i] ?? '').trim();
-              const partenaire = String(voeuxRows.Partenaire?.[i] ?? '').trim();
-              if (code && partenaire) {
-                if (!voeuxMap[code]) voeuxMap[code] = new Set();
-                voeuxMap[code].add(partenaire);
-              }
-            }
+      // Les coûts sont désormais lus directement dans Table_ecoles.CoutParcours.
+      // Table_voeux est conservée pour la compatibilité avec les données de vœux.
+      try {
+        const voeuxRows = await grist.docApi.fetchTable('Table_voeux');
+        voeuxMap = {};
+        if (voeuxRows && voeuxRows.CodeParcours) {
+          for (let i = 0; i < voeuxRows.CodeParcours.length; i++) {
+            const code = String(voeuxRows.CodeParcours[i] ?? '').trim();
+            if (code) voeuxMap[code] = { partenaire: voeuxRows.Partenaire ? voeuxRows.Partenaire[i] : '' };
           }
-        } catch (e) { console.warn('Table_voeux non trouvée ou vide', e); }
+        }
+      } catch (e) { console.warn("Table_voeux non trouvée ou vide", e); }
 
-        try {
-          const parcoursRows = await grist.docApi.fetchTable('Table_parcours');
-          parcoursMap = {};
-          if (parcoursRows && parcoursRows.NomParcours) {
-            for (let i = 0; i < parcoursRows.NomParcours.length; i++) {
-              const nom = String(parcoursRows.NomParcours[i] ?? '').trim();
-              const types = extractValues(parcoursRows.TypeParcours?.[i]);
-              if (nom) parcoursMap[normKey(nom)] = { typeParcours: types };
-            }
+      try {
+        const parcoursRows = await grist.docApi.fetchTable('Table_parcours');
+        parcoursMap = {};
+        if (parcoursRows && parcoursRows.NomParcours) {
+          for (let i = 0; i < parcoursRows.NomParcours.length; i++) {
+            const nom = String(parcoursRows.NomParcours[i] ?? '').trim();
+            const typeRaw = parcoursRows.TypeParcours ? parcoursRows.TypeParcours[i] : '';
+            const disciplines = extractValues(typeRaw);
+            if (nom) parcoursMap[nom] = { disciplines };
           }
-        } catch (e) { console.warn('Table_parcours non trouvée ou vide', e); }
-        relatedTablesLoaded = true;
-      })();
-      return relatedTablesPromise;
-    }
+        }
+      } catch (e) { console.warn("Table_parcours non trouvée ou vide", e); }
 
-    function normKey(value) {
-      return String(value ?? '').trim().toLocaleLowerCase('fr');
+      populateFilters(ecolesRecords);
     }
 
     function extractValues(val) {
-      if (val === null || val === undefined || val === '') return [];
+      if (val == null || val === '') return [];
       if (Array.isArray(val)) return val.map(v => String(v).trim()).filter(Boolean);
-      // Les choix multiples Grist peuvent être transmis sous forme de tableau ou de chaîne.
-      return String(val).split(',').map(v => v.trim()).filter(Boolean);
+      // Tolère les listes de choix multiples Grist (JSON ou chaînes séparées).
+      const str = String(val).trim();
+      if (!str) return [];
+      if ((str.startsWith('[') && str.endsWith(']')) || (str.startsWith('"') && str.endsWith('"'))) {
+        try {
+          const parsed = JSON.parse(str);
+          if (Array.isArray(parsed)) return parsed.map(v => String(v).trim()).filter(Boolean);
+          if (parsed != null) return [String(parsed).trim()].filter(Boolean);
+        } catch (_) {}
+      }
+      return str.split(/[;,]/).map(v => v.trim()).filter(Boolean);
     }
 
-    function populateFilters(records) {
-      const annees = new Set();
-      const ecoles = new Set();
-      const cycles = new Set();
-      const niveaux = new Set();
-      const disciplines = new Set();
+    function classKey(r) {
+      return [String(r.Ecole || '').trim(), String(r.Cycle || '').trim(), extractValues(r.Niveau).join('/'), String(r.Classe || r.NomClasse || '').trim()].join('|');
+    }
+    function classLabel(r) {
+      const school = String(r.Ecole || 'École non renseignée').trim();
+      const cycle = String(r.Cycle || '').trim();
+      const niveaux = extractValues(r.Niveau).join(', ');
+      const classe = String(r.Classe || r.NomClasse || '').trim();
+      return [school, cycle, niveaux, classe].filter(Boolean).join(' — ');
+    }
+    function toggleClassFilter() {
+      document.getElementById('class-filter-panel').classList.toggle('open');
+    }
+    function renderClassChecklist() {
+      const host = document.getElementById('class-filter-list');
+      const query = document.getElementById('class-filter-search').value.toLocaleLowerCase();
+      host.innerHTML = '';
+      const grouped = {};
+      classOptions.forEach(item => {
+        if (query && !item.label.toLocaleLowerCase().includes(query)) return;
+        (grouped[item.school] ||= []).push(item);
+      });
+      Object.keys(grouped).sort().forEach(school => {
+        const title = document.createElement('div'); title.className = 'group-title'; title.textContent = school;
+        host.appendChild(title);
+        grouped[school].forEach(item => {
+          const label = document.createElement('label');
+          const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = selectedClassKeys.has(item.key);
+          cb.addEventListener('change', () => { cb.checked ? selectedClassKeys.add(item.key) : selectedClassKeys.delete(item.key); updateClassFilterLabel(); updateDashboard(); });
+          label.appendChild(cb); label.appendChild(document.createTextNode(item.label)); host.appendChild(label);
+        });
+      });
+    }
+    function selectAllClasses(checked) {
+      const search = document.getElementById('class-filter-search').value.toLocaleLowerCase();
+      classOptions.forEach(item => { if (!search || item.label.toLocaleLowerCase().includes(search)) checked ? selectedClassKeys.add(item.key) : selectedClassKeys.delete(item.key); });
+      renderClassChecklist(); updateClassFilterLabel(); updateDashboard();
+    }
+    function updateClassFilterLabel() {
+      const button = document.getElementById('class-filter-toggle');
+      if (selectedClassKeys.size === classOptions.length) button.textContent = 'Toutes les classes';
+      else if (!selectedClassKeys.size) button.textContent = 'Aucune classe sélectionnée';
+      else button.textContent = `${selectedClassKeys.size} classe(s) sélectionnée(s)`;
+    }
+    document.addEventListener('click', event => {
+      const box = document.getElementById('class-filter');
+      if (box && !box.contains(event.target)) document.getElementById('class-filter-panel').classList.remove('open');
+    });
 
+    function populateFilters(records) {
+      const annees = new Set(), ecoles = new Set(), cycles = new Set(), disciplines = new Set();
+      classOptions = [];
+      disciplineByParcours = {};
       records.forEach(r => {
         if (r.AnneeScolaire) annees.add(String(r.AnneeScolaire).trim());
         if (r.Ecole) ecoles.add(String(r.Ecole).trim());
         if (r.Cycle) cycles.add(String(r.Cycle).trim());
-        
-        // Extraction propre pour les choix multiples de niveaux
-        const nivList = extractValues(r.Niveau);
-        nivList.forEach(n => niveaux.add(n));
-
-        const nomParcours = String(r.NomParcours || '').trim();
-        const infosParcours = parcoursMap[normKey(nomParcours)];
-        if (infosParcours) infosParcours.typeParcours.forEach(t => disciplines.add(t));
+        const key = classKey(r);
+        const label = classLabel(r);
+        if (!classOptions.some(item => item.key === key)) classOptions.push({key, label, school: String(r.Ecole || 'École non renseignée').trim()});
+        const code = String(r.CodeParcours ?? '').trim();
+        const nom = String(r.NomParcours ?? '').trim();
+        // Seuls les parcours attribués (CodeParcours différent de 0) nourrissent le filtre.
+        if (code && code !== '0' && nom && parcoursMap[nom]) {
+          const ds = parcoursMap[nom].disciplines || [];
+          disciplineByParcours[nom] = ds;
+          ds.forEach(d => disciplines.add(d));
+        }
       });
-
+      classOptions.sort((a,b) => a.label.localeCompare(b.label, 'fr'));
+      const availableKeys = new Set(classOptions.map(x => x.key));
+      selectedClassKeys = new Set([...selectedClassKeys].filter(k => availableKeys.has(k)));
+      if (selectedClassKeys.size === 0 && classOptions.length) selectedClassKeys = new Set(classOptions.map(x => x.key));
       fillSelect('filter-annee', annees, false);
       fillSelect('filter-ecole', ecoles, true);
       fillSelect('filter-cycle', cycles, true);
-      fillMultiSelect('filter-niveau', niveaux); // Remplissage spécifique multi-select
       fillSelect('filter-discipline', disciplines, true);
-
+      renderClassChecklist(); updateClassFilterLabel();
       const anneeSelect = document.getElementById('filter-annee');
-      if (anneeSelect.options.length > 0 && !anneeSelect.value) {
-        anneeSelect.selectedIndex = 0;
-      }
-
+      if (anneeSelect.options.length > 0 && !anneeSelect.value) anneeSelect.selectedIndex = 0;
       updateDashboard();
     }
 
@@ -406,9 +461,6 @@
       const selEcole = document.getElementById('filter-ecole').value;
       const selCycle = document.getElementById('filter-cycle').value;
       
-      const niveauSelect = document.getElementById('filter-niveau');
-      const selectedNiveaux = Array.from(niveauSelect.selectedOptions).map(o => o.value);
-
       const selDisc = document.getElementById('filter-discipline').value;
 
       const filtered = ecolesRecords.filter(r => {
@@ -416,23 +468,16 @@
         const ecole = String(r.Ecole || '').trim();
         const cycle = String(r.Cycle || '').trim();
         
-        const rowNiveaux = extractValues(r.Niveau);
-
+        const key = classKey(r);
         const nomParcours = String(r.NomParcours || '').trim();
-        const typesDisc = parcoursMap[normKey(nomParcours)]?.typeParcours || [];
-        const disc = typesDisc.length ? typesDisc : ['Non renseigné'];
+        const discList = disciplineByParcours[nomParcours] || (parcoursMap[nomParcours] ? parcoursMap[nomParcours].disciplines : []);
 
         if (selAnnee && selAnnee !== 'ALL' && annee !== selAnnee) return false;
         if (selEcole && selEcole !== 'ALL' && ecole !== selEcole) return false;
         if (selCycle && selCycle !== 'ALL' && cycle !== selCycle) return false;
         
-        // Filtre multi-niveaux : la classe doit contenir au moins l'un des niveaux sélectionnés
-        if (selectedNiveaux.length > 0) {
-          const matchNiveau = rowNiveaux.some(n => selectedNiveaux.includes(n));
-          if (!matchNiveau) return false;
-        }
-
-        if (selDisc && selDisc !== 'ALL' && !disc.includes(selDisc)) return false;
+        if (!selectedClassKeys.has(key)) return false;
+        if (selDisc && selDisc !== 'ALL' && !discList.includes(selDisc)) return false;
         return true;
       });
 
@@ -460,7 +505,7 @@
         schoolMap[schoolKey].classes += 1;
         schoolMap[schoolKey].eleves += eff;
 
-        const hasParcours = Boolean(code && code !== '0' && code.toLowerCase() !== 'null' && code.toLowerCase() !== 'undefined');
+        const hasParcours = Boolean(code && code !== '' && code !== '0' && code !== 'null' && code !== 'undefined');
         const hasPassMusique = Boolean(r.PasseportMusique && r.PasseportMusique !== 'false');
         const hasCinema = Boolean(r.Ecole_Cinema && Number(r.Ecole_Cinema) > 0);
         const hasChorale = Boolean(r.Chorale_CRR93 && Number(r.Chorale_CRR93) > 0);
