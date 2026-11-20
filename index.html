@@ -243,7 +243,7 @@
     <table>
       <thead>
         <tr>
-          <th>École & Type</th>
+          <th>École & Cycle</th>
           <th>Classes</th>
           <th>Élèves</th>
           <th>Parcours EAC</th>
@@ -264,46 +264,62 @@
     let ecolesRecords = [];
     let voeuxMap = {};     
     let parcoursMap = {};  
+    let relatedTablesLoaded = false;
+    let relatedTablesPromise = null;
 
     grist.ready({ requiredAccess: 'full' });
 
-    grist.onRecords(function(records) {
-      ecolesRecords = records;
-      fetchRelatedTables();
+    grist.onRecords(async function(records) {
+      ecolesRecords = records || [];
+      await fetchRelatedTables();
+      populateFilters(ecolesRecords);
     });
 
+    // Les tables de référence sont chargées une seule fois. Les actualisations
+    // de Table_ecoles ne déclenchent donc plus de nouveaux appels réseau.
     async function fetchRelatedTables() {
-      try {
-        const voeuxRows = await grist.docApi.fetchTable('Table_voeux');
-        voeuxMap = {};
-        if (voeuxRows && voeuxRows.CodeParcours) {
-          for (let i = 0; i < voeuxRows.CodeParcours.length; i++) {
-            const code = String(voeuxRows.CodeParcours[i] || '').trim();
-            const cout = Number(voeuxRows.CoutParcours ? voeuxRows.CoutParcours[i] : 0) || 0;
-            if (code) voeuxMap[code] = { cout: cout };
+      if (relatedTablesLoaded) return;
+      if (relatedTablesPromise) return relatedTablesPromise;
+      relatedTablesPromise = (async () => {
+        try {
+          const voeuxRows = await grist.docApi.fetchTable('Table_voeux');
+          voeuxMap = {};
+          if (voeuxRows && voeuxRows.CodeParcours) {
+            for (let i = 0; i < voeuxRows.CodeParcours.length; i++) {
+              const code = String(voeuxRows.CodeParcours[i] ?? '').trim();
+              const partenaire = String(voeuxRows.Partenaire?.[i] ?? '').trim();
+              if (code && partenaire) {
+                if (!voeuxMap[code]) voeuxMap[code] = new Set();
+                voeuxMap[code].add(partenaire);
+              }
+            }
           }
-        }
-      } catch (e) { console.warn("Table_voeux non trouvée ou vide", e); }
+        } catch (e) { console.warn('Table_voeux non trouvée ou vide', e); }
 
-      try {
-        const parcoursRows = await grist.docApi.fetchTable('Table_parcours');
-        parcoursMap = {};
-        if (parcoursRows && parcoursRows.CodeParcours) {
-          for (let i = 0; i < parcoursRows.CodeParcours.length; i++) {
-            const code = String(parcoursRows.CodeParcours[i] || '').trim();
-            const typeP = String(parcoursRows.TypeParcours ? parcoursRows.TypeParcours[i] : 'Non renseigné').trim();
-            if (code) parcoursMap[code] = { typeParcours: typeP || 'Non renseigné' };
+        try {
+          const parcoursRows = await grist.docApi.fetchTable('Table_parcours');
+          parcoursMap = {};
+          if (parcoursRows && parcoursRows.NomParcours) {
+            for (let i = 0; i < parcoursRows.NomParcours.length; i++) {
+              const nom = String(parcoursRows.NomParcours[i] ?? '').trim();
+              const types = extractValues(parcoursRows.TypeParcours?.[i]);
+              if (nom) parcoursMap[normKey(nom)] = { typeParcours: types };
+            }
           }
-        }
-      } catch (e) { console.warn("Table_parcours non trouvée ou vide", e); }
+        } catch (e) { console.warn('Table_parcours non trouvée ou vide', e); }
+        relatedTablesLoaded = true;
+      })();
+      return relatedTablesPromise;
+    }
 
-      populateFilters(ecolesRecords);
+    function normKey(value) {
+      return String(value ?? '').trim().toLocaleLowerCase('fr');
     }
 
     function extractValues(val) {
-      if (!val) return [];
-      if (Array.isArray(val)) return val.map(v => String(v).trim());
-      // Grist renvoie parfois les choix multiples sous forme de chaînes listées ou de tableaux convertis
+      if (val === null || val === undefined || val === '') return [];
+      if (Array.isArray(val)) return val.map(v => String(v).trim()).filter(Boolean);
+      // Les choix multiples Grist peuvent être transmis sous forme de tableau ou de chaîne.
       return String(val).split(',').map(v => v.trim()).filter(Boolean);
     }
 
@@ -323,10 +339,9 @@
         const nivList = extractValues(r.Niveau);
         nivList.forEach(n => niveaux.add(n));
 
-        const code = String(r.CodeParcours || '').trim();
-        if (code && parcoursMap[code] && parcoursMap[code].typeParcours) {
-          disciplines.add(parcoursMap[code].typeParcours);
-        }
+        const nomParcours = String(r.NomParcours || '').trim();
+        const infosParcours = parcoursMap[normKey(nomParcours)];
+        if (infosParcours) infosParcours.typeParcours.forEach(t => disciplines.add(t));
       });
 
       fillSelect('filter-annee', annees, false);
@@ -403,8 +418,9 @@
         
         const rowNiveaux = extractValues(r.Niveau);
 
-        const code = String(r.CodeParcours || '').trim();
-        const disc = (parcoursMap[code] && parcoursMap[code].typeParcours) ? parcoursMap[code].typeParcours : 'Non renseigné';
+        const nomParcours = String(r.NomParcours || '').trim();
+        const typesDisc = parcoursMap[normKey(nomParcours)]?.typeParcours || [];
+        const disc = typesDisc.length ? typesDisc : ['Non renseigné'];
 
         if (selAnnee && selAnnee !== 'ALL' && annee !== selAnnee) return false;
         if (selEcole && selEcole !== 'ALL' && ecole !== selEcole) return false;
@@ -416,7 +432,7 @@
           if (!matchNiveau) return false;
         }
 
-        if (selDisc && selDisc !== 'ALL' && disc !== selDisc) return false;
+        if (selDisc && selDisc !== 'ALL' && !disc.includes(selDisc)) return false;
         return true;
       });
 
@@ -444,7 +460,7 @@
         schoolMap[schoolKey].classes += 1;
         schoolMap[schoolKey].eleves += eff;
 
-        const hasParcours = Boolean(code && code !== '' && code !== '0' && code !== 'null' && code !== 'undefined');
+        const hasParcours = Boolean(code && code !== '0' && code.toLowerCase() !== 'null' && code.toLowerCase() !== 'undefined');
         const hasPassMusique = Boolean(r.PasseportMusique && r.PasseportMusique !== 'false');
         const hasCinema = Boolean(r.Ecole_Cinema && Number(r.Ecole_Cinema) > 0);
         const hasChorale = Boolean(r.Chorale_CRR93 && Number(r.Chorale_CRR93) > 0);
@@ -455,7 +471,7 @@
           stats.parcours.eleves += eff;
           schoolMap[schoolKey].eac++;
 
-          const cout = (voeuxMap[code] && voeuxMap[code].cout) ? voeuxMap[code].cout : 0;
+          const cout = Number(r.CoutParcours) || 0;
           stats.parcours.budget += cout;
           schoolMap[schoolKey].budget += cout;
         }
