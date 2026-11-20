@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tableau de Bord PEAC & Budget — Grist Widget</title>
+  <title>Tableau de Bord PEAC & Budget — V6</title>
   
   <!-- API Grist officielle -->
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
@@ -88,6 +88,17 @@
     .hint-text { font-size: 0.65rem; color: #a0aec0; margin-top: 2px; }
 
     .multi-select { min-width: 170px; min-height: 64px; padding: 6px; border:1px solid var(--border); border-radius:6px; background:#fff; font-size:.83rem; }
+    .check-filter { position:relative; min-width:190px; flex:1; }
+    .check-filter label { display:block; font-size:.7rem; font-weight:bold; color:#718096; text-transform:uppercase; margin-bottom:4px; }
+    .check-filter-toggle { width:100%; text-align:left; padding:7px 9px; border:1px solid var(--border); border-radius:6px; background:#fff; color:var(--text); cursor:pointer; font-size:.85rem; }
+    .check-filter-panel { display:none; position:absolute; z-index:30; top:100%; left:0; width:min(310px,90vw); max-height:330px; overflow:auto; padding:10px; background:#fff; border:1px solid var(--border); border-radius:7px; box-shadow:0 5px 18px rgba(0,0,0,.14); }
+    .check-filter-panel.open { display:block; }
+    .check-filter-panel input[type=search] { width:100%; box-sizing:border-box; padding:7px; border:1px solid var(--border); border-radius:5px; margin-bottom:7px; }
+    .check-filter-actions { display:flex; gap:6px; margin:4px 0 8px; }
+    .check-filter-actions button { padding:5px 8px; border:1px solid var(--border); border-radius:5px; background:#f7fafc; cursor:pointer; font-size:.75rem; }
+    .check-filter-options label { display:flex; align-items:center; gap:8px; padding:5px 2px; text-transform:none; font-size:.82rem; font-weight:normal; color:var(--text); }
+    .reset-btn { padding:8px 12px; border:1px solid #64748b; border-radius:6px; background:#f8fafc; color:#334155; cursor:pointer; font-weight:600; }
+    .status-note { font-size:.75rem; color:#64748b; margin:5px 0 12px; }
     .toolbar { display:flex; justify-content:flex-end; gap:8px; margin:10px 0; }
     .action-btn { padding:7px 11px; border:1px solid var(--secondary); border-radius:6px; background:#fff; color:var(--secondary); cursor:pointer; font-weight:600; }
     .detail-btn { padding:5px 8px; border:1px solid var(--secondary); border-radius:5px; background:#fff; color:var(--secondary); cursor:pointer; white-space:nowrap; }
@@ -189,7 +200,7 @@
 </head>
 <body>
 
-  <h2>📊 Synthèse PEAC, Dispositifs & Budget</h2>
+  <h2>📊 Synthèse PEAC, Dispositifs & Budget — V6</h2>
 
   <!-- FILTRES CROISÉS -->
   <div class="filters-bar">
@@ -205,15 +216,15 @@
       <label for="filter-cycle">Cycle</label>
       <select id="filter-cycle" onchange="updateDashboard()"><option value="ALL">Tous</option></select>
     </div>
-    <div class="filter-group">
-      <label for="filter-niveau">Niveau (choix multiples)</label>
-      <select id="filter-niveau" class="multi-select" multiple onchange="updateDashboard()" title="Sélectionner un ou plusieurs niveaux"></select>
-      <div class="hint-text">Ctrl (ou Cmd) permet plusieurs choix</div>
+    <div class="check-filter" id="niveau-filter">
+      <label>Niveau</label><button type="button" class="check-filter-toggle" id="niveau-toggle" aria-expanded="false">Tous les niveaux ▾</button>
+      <div class="check-filter-panel" id="niveau-panel"><input type="search" id="niveau-search" placeholder="Rechercher un niveau…"><div class="check-filter-actions"><button type="button" onclick="selectAllChecks('niveau')">Tout sélectionner</button><button type="button" onclick="clearChecks('niveau')">Tout effacer</button></div><div class="check-filter-options" id="niveau-options"></div></div>
     </div>
-    <div class="filter-group">
-      <label for="filter-discipline">Champ Disciplinaire</label>
-      <select id="filter-discipline" class="multi-select" multiple onchange="updateDashboard()" title="Sélectionner une ou plusieurs disciplines"></select>
+    <div class="check-filter" id="discipline-filter">
+      <label>Champ disciplinaire</label><button type="button" class="check-filter-toggle" id="discipline-toggle" aria-expanded="false">Toutes les disciplines ▾</button>
+      <div class="check-filter-panel" id="discipline-panel"><input type="search" id="discipline-search" placeholder="Rechercher une discipline…"><div class="check-filter-actions"><button type="button" onclick="selectAllChecks('discipline')">Tout sélectionner</button><button type="button" onclick="clearChecks('discipline')">Tout effacer</button></div><div class="check-filter-options" id="discipline-options"></div></div>
     </div>
+    <button type="button" class="reset-btn" onclick="resetAllFilters()">↺ Effacer tous les filtres</button>
   </div>
 
   <!-- CARTES KPI -->
@@ -273,7 +284,7 @@
       </tbody>
     </table>
   </div>
-  <div class="toolbar"><button class="action-btn" type="button" onclick="exportWorkbook()">Exporter la synthèse</button></div>
+  <div class="toolbar"><button class="action-btn" type="button" onclick="exportWorkbook()">Exporter la synthèse Excel</button><button class="action-btn" type="button" onclick="printAnnualReport()">Éditer le rapport annuel PDF</button></div><div class="status-note" id="data-status">Chargement des données Grist…</div>
   <div class="modal-backdrop" id="detail-modal" onclick="if(event.target===this)closeDetail()">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="detail-title">
       <div class="modal-head"><h2 id="detail-title">Parcours attribués</h2><button class="modal-close" onclick="closeDetail()">Fermer ✕</button></div>
@@ -289,11 +300,31 @@
     let disciplinesByRef = {};
     let filteredRowsCache = [];
     let summaryCache = [];
+    let allSchoolRecords = [];
+    let filterOptions = {niveau:[], discipline:[]};
+    let sourceRecordsLoaded = false;
+    let fullTableFetchOk = false;
 
     grist.ready({ requiredAccess: 'full' });
-    grist.onRecords(function(records) { ecolesRecords = records || []; fetchRelatedTables(); });
+    grist.onRecords(function(records) { if(!sourceRecordsLoaded && records) { ecolesRecords = records || []; fetchRelatedTables(); } });
+
+    function tableToRecords(table) {
+      if(!table || !Array.isArray(table.id)) return [];
+      const keys=Object.keys(table).filter(k=>Array.isArray(table[k]));
+      return table.id.map((id,i)=>{const r={id};keys.forEach(k=>{r[k]=table[k][i];});return r;});
+    }
 
     async function fetchRelatedTables() {
+      try {
+        // Lecture explicite de la table complète : CoutParcours (Numérique) ne dépend ainsi pas des colonnes projetées dans la vue du widget.
+        const schoolTable=await grist.docApi.fetchTable('Table_ecoles');
+        const fullRows=tableToRecords(schoolTable);
+        if(fullRows.length){ allSchoolRecords=fullRows; ecolesRecords=fullRows; sourceRecordsLoaded=true; fullTableFetchOk=true; }
+        else { allSchoolRecords=ecolesRecords.slice(); }
+      } catch(e) {
+        console.warn('Lecture complète de Table_ecoles impossible ; utilisation des lignes transmises par la vue',e);
+        allSchoolRecords=ecolesRecords.slice();
+      }
       try {
         const voeuxRows = await grist.docApi.fetchTable('Table_voeux');
         voeuxMap = {};
@@ -314,6 +345,8 @@
         }
       } catch(e) { console.warn('Table_parcours non disponible',e); }
       populateFilters(ecolesRecords);
+      const missingCost=ecolesRecords.filter(r=>hasAssignedCode(r)&&(!Number.isFinite(Number(r.CoutParcours))||r.CoutParcours===null||r.CoutParcours==='')).length;
+      document.getElementById("data-status").textContent=`${ecolesRecords.length} lignes ${fullTableFetchOk?"lues directement dans Table_ecoles":"reçues de la vue Grist (lecture complète indisponible)"}${missingCost?` · ${missingCost} parcours avec coût absent ou invalide`:" · coûts numériques contrôlés"}.`;
     }
     function extractValues(val) {
       if(val==null || val==='') return [];
@@ -327,6 +360,8 @@
       if(typeof val==='number') return [String(val)];
       return [];
     }
+    function hasAssignedCode(r){const c=r.CodeParcours;return c!==null&&c!==undefined&&String(c).trim()!==''&&String(c).trim()!=='0'&&String(c).trim().toLowerCase()!=='null'&&String(c).trim().toLowerCase()!=='undefined';}
+    function numericCost(v){if(typeof v==='number')return Number.isFinite(v)?v:0;if(v===null||v===undefined||v==='')return 0;const n=Number(String(v).trim().replace(/\s/g,'').replace(',','.'));return Number.isFinite(n)?n:0;}
     function getDisciplines(r) {
       const ids=refIds(r.TypeParcours); const result=[];
       ids.forEach(id=>(disciplinesByRef[id]||[]).forEach(d=>{if(!result.includes(d))result.push(d);}));
@@ -336,16 +371,25 @@
       if(!result.length && parcoursMap[nom]) return parcoursMap[nom].disciplines||[];
       return result;
     }
-    function selectedValues(id) { return Array.from(document.getElementById(id).selectedOptions).map(o=>o.value); }
-    function fillMultiSelect(id, values) {
-      const el=document.getElementById(id), prior=selectedValues(id); el.innerHTML='';
-      [...values].sort((a,b)=>a.localeCompare(b,'fr')).forEach(v=>{const opt=document.createElement('option');opt.value=v;opt.textContent=v;opt.selected=prior.length===0||prior.includes(v);el.appendChild(opt);});
+    function selectedValues(key) { return Array.from(document.querySelectorAll(`#${key}-options input[type=checkbox]:checked`)).map(x=>x.value); }
+    function buildCheckFilter(key, values) {
+      const box=document.getElementById(`${key}-options`), prior=selectedValues(key);
+      box.innerHTML=''; filterOptions[key]=[...values].sort((a,b)=>a.localeCompare(b,'fr'));
+      filterOptions[key].forEach(v=>{const lab=document.createElement('label'),cb=document.createElement('input');cb.type='checkbox';cb.value=v;cb.checked=prior.length?prior.includes(v):false;cb.addEventListener('change',()=>{updateCheckLabel(key);updateDashboard();});lab.append(cb,document.createTextNode(v));box.appendChild(lab);});
+      updateCheckLabel(key);
     }
+    function updateCheckLabel(key){const vals=selectedValues(key),all=filterOptions[key]||[];document.getElementById(`${key}-toggle`).textContent=vals.length===0?`Tous / toutes (${all.length}) ▾`:vals.length===1?`${vals[0]} ▾`:`${vals.length} sélectionnés ▾`;}
+    function selectAllChecks(key){document.querySelectorAll(`#${key}-options input[type=checkbox]`).forEach(x=>x.checked=true);updateCheckLabel(key);updateDashboard();}
+    function clearChecks(key){document.querySelectorAll(`#${key}-options input[type=checkbox]`).forEach(x=>x.checked=false);updateCheckLabel(key);updateDashboard();}
+    function resetAllFilters(){['filter-ecole','filter-cycle'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='ALL';});const year=document.getElementById('filter-annee');if(year.options.length)year.selectedIndex=0;clearChecks('niveau');clearChecks('discipline');document.querySelectorAll('.check-filter-panel').forEach(p=>p.classList.remove('open'));document.querySelectorAll('.check-filter-toggle').forEach(b=>b.setAttribute('aria-expanded','false'));updateDashboard();}
+    ['niveau','discipline'].forEach(key=>{document.getElementById(`${key}-toggle`).addEventListener('click',()=>{const panel=document.getElementById(`${key}-panel`);const open=!panel.classList.contains('open');document.querySelectorAll('.check-filter-panel').forEach(p=>p.classList.remove('open'));panel.classList.toggle('open',open);document.querySelectorAll('.check-filter-toggle').forEach(b=>b.setAttribute('aria-expanded','false'));document.getElementById(`${key}-toggle`).setAttribute('aria-expanded',String(open));});document.getElementById(`${key}-search`).addEventListener('input',ev=>{const q=ev.target.value.toLocaleLowerCase('fr');document.querySelectorAll(`#${key}-options label`).forEach(l=>l.style.display=l.textContent.toLocaleLowerCase('fr').includes(q)?'flex':'none');});});
+    document.addEventListener('click',ev=>{if(!ev.target.closest('.check-filter')){document.querySelectorAll('.check-filter-panel').forEach(p=>p.classList.remove('open'));document.querySelectorAll('.check-filter-toggle').forEach(b=>b.setAttribute('aria-expanded','false'));}});
+
     function fillSelect(id, values, all) {
       const el=document.getElementById(id), prior=el.value; el.innerHTML='';
       if(all){const opt=document.createElement('option');opt.value='ALL';opt.textContent='Toutes / Tous';el.appendChild(opt);}
       [...values].sort((a,b)=>a.localeCompare(b,'fr')).forEach(v=>{const opt=document.createElement('option');opt.value=v;opt.textContent=v;el.appendChild(opt);});
-      if(prior && [...values].includes(prior))el.value=prior;
+      if(prior && [...values].includes(prior))el.value=prior; else if(all)el.value='ALL';
     }
 
     function populateFilters(records) {
@@ -356,7 +400,7 @@
         const code=String(r.CodeParcours??'').trim(); if(code&&code!=='0')getDisciplines(r).forEach(d=>disciplines.add(d));
       });
       fillSelect('filter-annee',annees,false); fillSelect('filter-ecole',ecoles,true); fillSelect('filter-cycle',cycles,true);
-      fillMultiSelect('filter-niveau',niveaux); fillMultiSelect('filter-discipline',disciplines);
+      buildCheckFilter('niveau',niveaux); buildCheckFilter('discipline',disciplines);
       const year=document.getElementById('filter-annee'); if(year.options.length&&!year.value)year.selectedIndex=0;
       updateDashboard();
     }
@@ -366,8 +410,8 @@
       const selEcole = document.getElementById('filter-ecole').value;
       const selCycle = document.getElementById('filter-cycle').value;
       
-      const selDisc = selectedValues('filter-discipline');
-      const selNiveau = selectedValues('filter-niveau');
+      const selDisc = selectedValues('discipline');
+      const selNiveau = selectedValues('niveau');
 
       const filtered = ecolesRecords.filter(r => {
         const annee = String(r.AnneeScolaire || '').trim();
@@ -411,7 +455,7 @@
         schoolMap[schoolKey].classes += 1;
         schoolMap[schoolKey].eleves += eff;
 
-        const hasParcours = Boolean(code && code !== '' && code !== '0' && code !== 'null' && code !== 'undefined');
+        const hasParcours = hasAssignedCode(r);
         const hasPassMusique = Boolean(r.PasseportMusique && r.PasseportMusique !== 'false');
         const hasCinema = Boolean(r.Ecole_Cinema && Number(r.Ecole_Cinema) > 0);
         const hasChorale = Boolean(r.Chorale_CRR93 && Number(r.Chorale_CRR93) > 0);
@@ -422,7 +466,7 @@
           stats.parcours.eleves += eff;
           schoolMap[schoolKey].eac++;
 
-          const cout = Number(r.CoutParcours) || 0;
+          const cout = numericCost(r.CoutParcours);
           stats.parcours.budget += cout;
           schoolMap[schoolKey].budget += cout;
           const nm=String(r.NomParcours||'').trim(); if(nm && !schoolMap[schoolKey].parcours.some(x=>x.nom===nm)) schoolMap[schoolKey].parcours.push({nom:nm,disciplines:getDisciplines(r),partenaire:(voeuxMap[code] && voeuxMap[code].size===1 ? [...voeuxMap[code]][0] : (voeuxMap[code] && voeuxMap[code].size>1 ? 'Plusieurs partenaires possibles' : '')),cout});
@@ -472,17 +516,47 @@
     }
     function closeDetail(){document.getElementById('detail-modal').classList.remove('open');}
     function xmlEsc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+    function excelCell(v){return `<Cell><Data ss:Type="${typeof v==='number'&&Number.isFinite(v)?'Number':'String'}">${xmlEsc(v)}</Data></Cell>`;}
     function exportWorkbook(){
-      const schools=summaryCache; const detail=[]; schools.forEach(s=>s.parcours.forEach(p=>detail.push([s.key,p.nom,p.disciplines.join(', '),p.partenaire,p.cout])));
-      const devices=[['École & Cycle','Classes','Élèves','Passeport Musique','École & Cinéma','Chorale CRR93','CHAM/CHAT'],...schools.map(s=>[s.key,s.classes,s.eleves,s.mus,s.cin,s.cho,s.cham])];
-      const summary=[['Indicateur','Valeur'],['Parcours classes',document.getElementById('kpi-parcours-classes').textContent],['Parcours élèves',document.getElementById('kpi-parcours-eleves').textContent],['Budget parcours',document.getElementById('kpi-budget-parcours').textContent],['Passeport Musique',document.getElementById('kpi-passmusique-classes').textContent+' / '+document.getElementById('kpi-passmusique-eleves').textContent],['École & Cinéma',document.getElementById('kpi-cinema-classes').textContent+' / '+document.getElementById('kpi-cinema-eleves').textContent],['Chorale CRR93',document.getElementById('kpi-chorale-classes').textContent+' / '+document.getElementById('kpi-chorale-eleves').textContent],['CHAM/CHAT',document.getElementById('kpi-cham-classes').textContent+' / '+document.getElementById('kpi-cham-eleves').textContent]];
-      const schoolSheet=[['École & Cycle','Classes','Élèves','Parcours attribués','Budget','Passeport Musique','École & Cinéma','Chorale','CHAM/CHAT'],...schools.map(s=>[s.key,s.classes,s.eleves,s.eac,s.budget,s.mus,s.cin,s.cho,s.cham])];
-      const detailSheet=[['École & Cycle','Parcours','Discipline','Partenaire','Coût'],...detail];
-      const sheets=[['01 Synthèse générale',summary],['02 Écoles & cycles',schoolSheet],['03 Détail parcours',detailSheet],['04 Dispositifs',devices],['05 Vœux et rangs',[ ['Note','Les données de rang/vœux ne sont pas intégrées dans cette version d’export car leur structure n’a pas été validée dans le widget.'] ]]];
-      // Export compatible Excel via SpreadsheetML (format .xml multi-feuilles, sans dépendance externe).
-      const workbook='<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'+sheets.map(([name,data])=>`<Worksheet ss:Name="${xmlEsc(name.slice(0,31))}"><Table>${data.map(row=>'<Row>'+row.map(v=>`<Cell><Data ss:Type="${typeof v==='number'?'Number':'String'}">${xmlEsc(v)}</Data></Cell>`).join('')+'</Row>').join('')}</Table></Worksheet>`).join('')+'</Workbook>';
-      const blob=new Blob([workbook],{type:'application/vnd.ms-excel'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='Synthese_PEAC.xls';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+      // Le classeur reprend la logique des six onglets du fichier Attribution fourni.
+      const year=document.getElementById('filter-annee').value||'';
+      const yearRows=ecolesRecords.filter(r=>String(r.AnneeScolaire||'').trim()===year);
+      const assigned=yearRows.filter(hasAssignedCode);
+      const cost=assigned.reduce((a,r)=>a+numericCost(r.CoutParcours),0);
+      const noAssigned=yearRows.filter(r=>!hasAssignedCode(r)).length;
+      const rowsAttributions=[['Cycle','École','Niveau','Classe / enseignant','Effectif classe','Code attribué','Parcours attribué','Partenaire','Coût estimé (€)','Vœux exprimés']];
+      yearRows.forEach(r=>{const code=String(r.CodeParcours??'').trim();const partners=voeuxMap[code]?[...voeuxMap[code]].join(' / '):'';rowsAttributions.push([r.Cycle||'',r.Ecole||'',extractValues(r.Niveau).join(', '),r.Classe||r.Enseignant||'',numericCost(r.EffectifsClasse),code,r.NomParcours||'',partners,numericCost(r.CoutParcours),r.Voeux||r.VoeuxExprimes||'']);});
+      const group={};yearRows.forEach(r=>{const k=`${r.Ecole||'École non renseignée'} (${r.Cycle||'Cycle non renseigné'})`;group[k]??={classes:0,eleves:0,eac:0,cost:0,mus:0,cin:0,cho:0,cham:0};const g=group[k];g.classes++;g.eleves+=numericCost(r.EffectifsClasse);if(hasAssignedCode(r)){g.eac++;g.cost+=numericCost(r.CoutParcours);}if(dispositif(r,'PasseportMusique'))g.mus++;if(dispositif(r,'Ecole_Cinema'))g.cin++;if(dispositif(r,'Chorale_CRR93'))g.cho++;if(dispositif(r,'Sensibilisation_CHAM_CHAT'))g.cham++;});
+      const summary=[['Indicateur','Résultat','Règle / commentaire'],['Année scolaire',year,'Année sélectionnée dans le widget'],['Classes ayant reçu un parcours',assigned.length,'Nombre de lignes de classe avec CodeParcours renseigné'],['Classes sans attribution',noAssigned,'Sur les lignes de Table_ecoles pour l’année sélectionnée'],['Coût prévisionnel total (€)',cost,'Somme de CoutParcours pour les lignes attribuées'],['Élèves dans les classes attribuées',assigned.reduce((a,r)=>a+numericCost(r.EffectifsClasse),0),'Somme des EffectifsClasse des classes attribuées'],['Écoles / cycles',Object.keys(group).length,'Groupes école et cycle distincts'],['Note','Les vœux et rangs détaillés ne sont ajoutés que si les champs correspondants sont présents dans Table_ecoles ou Table_voeux.','']];
+      const detail=[['Cycle','Code','Parcours','Discipline','Partenaire(s)','Nb attribué','Coût unitaire / classe (€)','Coût total (€)']];
+      const byCode={};assigned.forEach(r=>{const c=String(r.CodeParcours);byCode[c]??={cycle:r.Cycle||'',code:c,name:r.NomParcours||'',disc:new Set(),partners:new Set(),n:0,cost:0};const x=byCode[c];getDisciplines(r).forEach(d=>x.disc.add(d));if(voeuxMap[c])voeuxMap[c].forEach(p=>x.partners.add(p));x.n++;x.cost+=numericCost(r.CoutParcours);});
+      Object.values(byCode).sort((a,b)=>a.cycle.localeCompare(b.cycle,'fr')||a.code.localeCompare(b.code,'fr', {numeric:true})).forEach(x=>detail.push([x.cycle,x.code,x.name,[...x.disc].join(', '),[...x.partners].join(' / '),x.n,x.n?x.cost/x.n:0,x.cost]));
+      const schoolSheet=[['École & Cycle','Classes','Élèves','Parcours attribués','Budget (€)','Passeport Musique','École & Cinéma','Chorale CRR93','CHAM/CHAT'],...Object.entries(group).sort().map(([k,g])=>[k,g.classes,g.eleves,g.eac,g.cost,g.mus,g.cin,g.cho,g.cham])];
+      const devices=[['École & Cycle','Classe','Niveau','Parcours EAC','Chorale CRR93','Passeport Musique','Sensibilisation CHAM/CHAT','École & Cinéma']];
+      yearRows.forEach(r=>devices.push([`${r.Ecole||''} (${r.Cycle||''})`,r.Classe||r.Enseignant||'',extractValues(r.Niveau).join(', '),r.NomParcours||'',dispositif(r,'Chorale_CRR93')?'Oui':'—',dispositif(r,'PasseportMusique')?'Oui':'—',dispositif(r,'Sensibilisation_CHAM_CHAT')?'Oui':'—',dispositif(r,'Ecole_Cinema')?'Oui':'—']));
+      const method=[['Sujet','Hypothèse / commentaire'],['Source','Table_ecoles ; année scolaire sélectionnée'],['Coût','CoutParcours, colonne numérique de Table_ecoles'],['Discipline','Références TypeParcours rapprochées de Table_parcours'],['Vœux / rangs','Non reconstitués si la relation entre réponses et classes n’est pas univoque'],['Limite','Le classeur reproduit la structure des six onglets du modèle Attribution ; les matrices de vœux colorées ne peuvent être reconstituées que si les vœux individuels sont disponibles et reliés à chaque classe.']];
+      function matrixSheet(kind){const re=kind==='EE'?/élémentaire|elementaire|^ee$/i:/maternelle|^em$/i;const subset=yearRows.filter(r=>re.test(String(r.Cycle||'')));const parcours=[...new Map(subset.filter(hasAssignedCode).map(r=>[String(r.CodeParcours),{code:String(r.CodeParcours),name:r.NomParcours||('Parcours '+r.CodeParcours)}])).values()].sort((a,b)=>a.code.localeCompare(b.code,'fr',{numeric:true}));const head=['École','Classe / enseignant','Niveau','Effectif','Code attribué',...parcours.map(p=>p.code+' — '+p.name)];const data=[head];subset.forEach(r=>{const code=String(r.CodeParcours??'');data.push([r.Ecole||'',r.Classe||r.NomClasse||r.Enseignant||extractValues(r.Niveau).join(', '),extractValues(r.Niveau).join(', '),numericCost(r.EffectifsClasse),code,...parcours.map(p=>p.code===code?'ATTRIBUÉ':'')]);});return data;}
+      const sheets=[['Synthèse',summary],['Attributions',rowsAttributions],['Détail parcours',detail],['Élémentaire',matrixSheet('EE')],['Maternelle',matrixSheet('EM')],['Méthode et réserves',method]];
+      const styles='<Styles><Style ss:ID="Default" ss:Name="Normal"><Alignment ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10"/></Style><Style ss:ID="Title"><Font ss:Bold="1" ss:Size="15" ss:Color="#FFFFFF"/><Interior ss:Color="#1A365D" ss:Pattern="Solid"/></Style><Style ss:ID="Header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#2B6CB0" ss:Pattern="Solid"/><Alignment ss:WrapText="1" ss:Vertical="Center"/></Style></Styles>';
+      const workbook='<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'+styles+sheets.map(([name,data])=>`<Worksheet ss:Name="${xmlEsc(name)}"><Table>${data.map((row,i)=>'<Row>'+row.map(v=>`<Cell${i===0?' ss:StyleID="Header"':''}><Data ss:Type="${typeof v==='number'&&Number.isFinite(v)?'Number':'String'}">${xmlEsc(v)}</Data></Cell>`).join('')+'</Row>').join('')}</Table></Worksheet>`).join('')+'</Workbook>';
+      const blob=new Blob([workbook],{type:'application/vnd.ms-excel'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`Attributions_PEAC_${year.replace('/','-')||'annee'}.xls`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);
     }
+
+    function dispositif(r,key){const v=r[key];if(v===null||v===undefined||v===''||v===false||v===0||v==='0'||String(v).toLowerCase()==='false')return false;if(typeof v==='number')return v>0;if(Array.isArray(v))return v.length>0;return true;}
+    function printAnnualReport(){
+      const year=document.getElementById('filter-annee').value||'';
+      // Le PDF ignore volontairement les filtres école/cycle/niveau/disciplines : toutes les écoles et tous les cycles de l'année sont inclus.
+      const rows=ecolesRecords.filter(r=>String(r.AnneeScolaire||'').trim()===year);
+      if(!rows.length){alert('Aucune donnée trouvée dans Table_ecoles pour cette année scolaire.');return;}
+      const groups={};rows.forEach(r=>{const school=String(r.Ecole||'École non renseignée').trim(),cycle=String(r.Cycle||'Cycle non renseigné').trim(),key=school+' — '+cycle;(groups[key]??=[]).push(r);});
+      const entries=Object.entries(groups).sort(([a],[b])=>a.localeCompare(b,'fr'));
+      const esc=escapeHtml;
+      const toc=entries.map(([k],i)=>`<li><a href="#ecole-${i+1}">${esc(k)}</a><span>${i+3}</span></li>`).join('');
+      const pages=entries.map(([k,rs],i)=>{const trs=rs.slice().sort((a,b)=>extractValues(a.Niveau).join(',').localeCompare(extractValues(b.Niveau).join(','),'fr')||String(a.Classe||a.Enseignant||'').localeCompare(String(b.Classe||b.Enseignant||''),'fr')).map(r=>{const cls=r.Classe||r.NomClasse||r.Enseignant||extractValues(r.Niveau).join(', ')||'Classe non renseignée';const eac=hasAssignedCode(r)?(r.NomParcours||('Code '+r.CodeParcours)):'—';return `<tr><td>${esc(cls)}</td><td>${esc(extractValues(r.Niveau).join(', ')||'—')}</td><td>${esc(eac)}</td><td>${dispositif(r,'Chorale_CRR93')?'Oui':'—'}</td><td>${dispositif(r,'PasseportMusique')?'Oui':'—'}</td><td>${dispositif(r,'Sensibilisation_CHAM_CHAT')?'Oui':'—'}</td><td>${dispositif(r,'Ecole_Cinema')?'Oui':'—'}</td></tr>`;}).join('');const count={eac:rs.filter(hasAssignedCode).length,cho:rs.filter(r=>dispositif(r,'Chorale_CRR93')).length,mus:rs.filter(r=>dispositif(r,'PasseportMusique')).length,cham:rs.filter(r=>dispositif(r,'Sensibilisation_CHAM_CHAT')).length,cin:rs.filter(r=>dispositif(r,'Ecole_Cinema')).length};return `<section class="school-page" id="ecole-${i+1}"><h2>${esc(k)}</h2><p class="page-sub">${rs.length} classes recensées · ${rs.reduce((a,r)=>a+numericCost(r.EffectifsClasse),0)} élèves</p><table><thead><tr><th>Classe / enseignant</th><th>Niveau</th><th>Parcours EAC</th><th>Chorale CRR93</th><th>Passeport Musique</th><th>Sensibilisation CHAM/CHAT</th><th>École & Cinéma</th></tr></thead><tbody>${trs}</tbody></table><div class="totals"><b>Dispositifs déployés dans ce cycle :</b> Parcours EAC : ${count.eac} classes · Chorale : ${count.cho} · Passeport Musique : ${count.mus} · CHAM/CHAT : ${count.cham} · École & Cinéma : ${count.cin}</div></section>`;}).join('');
+      const html=`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Synthèse des dispositifs ${esc(year)}</title><style>@page{size:A4 landscape;margin:14mm 12mm 16mm;@bottom-right{content:'Page ' counter(page);font:9pt Arial;color:#64748b}}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#243247;margin:0;font-size:10pt}.cover{page-break-after:always;padding:18mm 8mm}.cover h1{font-size:26pt;color:#1A365D;margin:0 0 10mm}.cover h2{font-size:16pt}.toc{page-break-after:always}.toc h2{color:#1A365D}.toc ol{padding-left:22px}.toc li{display:flex;justify-content:space-between;border-bottom:1px dotted #9aa8b8;padding:7px 0}.toc a{color:#1A365D;text-decoration:none}.school-page{page-break-after:always;break-after:page}.school-page:last-child{page-break-after:auto}.school-page h2{font-size:18pt;color:#1A365D;margin:0 0 3mm}.page-sub{color:#64748b;margin:0 0 7mm}table{width:100%;border-collapse:collapse;table-layout:fixed}th{background:#1A365D;color:white;font-size:8pt;padding:7px 5px;text-align:left}td{border:1px solid #cbd5e1;padding:7px 5px;vertical-align:top;overflow-wrap:anywhere;font-size:8.5pt}tbody tr:nth-child(even){background:#f1f5f9}.totals{margin-top:8mm;padding:8px;background:#eaf0f7;border-left:4px solid #319795;font-size:9pt}.print-note{color:#64748b;font-size:9pt;margin-top:12mm}@media screen{body{padding:20px}.cover,.toc,.school-page{background:#fff;margin:0 auto 18px;padding:25px;max-width:1100px;box-shadow:0 2px 12px #0002}.school-page{min-height:650px}}</style></head><body><section class="cover"><h1>Synthèse des dispositifs déployés</h1><h2>Année scolaire ${esc(year)}</h2><p>Écoles et classes — parcours d'éducation artistique et culturelle et dispositifs associés</p><p class="print-note">Document généré à partir des données de la table Table_ecoles dans Grist.</p></section><section class="toc"><h2>Sommaire</h2><ol>${toc}</ol></section>${pages}<script>window.onload=()=>{setTimeout(()=>window.print(),500)};<\/script></body></html>`;
+      const win=window.open('','_blank');if(!win){alert('La fenêtre du rapport a été bloquée. Autorise les fenêtres contextuelles pour ce widget puis réessaie.');return;}win.document.open();win.document.write(html);win.document.close();
+    }
+
   </script>
 </body>
 </html>
