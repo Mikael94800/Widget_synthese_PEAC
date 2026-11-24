@@ -146,6 +146,11 @@
     .kpi-card.budget .kpi-value {
       color: var(--accent);
     }
+    .kpi-card.combined {
+      border-left-color: #177E89;
+      background: linear-gradient(135deg, var(--card-bg), rgba(23,126,137,0.08));
+    }
+    .kpi-card.combined .kpi-value { color: #177E89; }
 
     .kpi-sub {
       font-size: 0.7rem;
@@ -200,7 +205,7 @@
 </head>
 <body>
 
-  <h2>📊 Synthèse PEAC, Dispositifs & Budget — V8</h2>
+  <h2>📊 Synthèse PEAC, Dispositifs & Budget — V9</h2>
 
   <!-- FILTRES CROISÉS -->
   <div class="filters-bar">
@@ -238,6 +243,11 @@
       <div class="kpi-title">Coût Parcours EAC</div>
       <div class="kpi-value" id="kpi-budget-parcours">0 €</div>
       <div class="kpi-sub">Total engagé</div>
+    </div>
+    <div class="kpi-card combined">
+      <div class="kpi-title">Ensemble des dispositifs culturels confondus</div>
+      <div class="kpi-value" id="kpi-combined-classes">0 cl.</div>
+      <div class="kpi-sub" id="kpi-combined-eleves">0 élèves · bénéficiaires d'au moins un dispositif</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-title">Passeport Musique</div>
@@ -441,7 +451,8 @@
         passMusique: { classes: 0, eleves: 0 },
         cinema: { classes: 0, eleves: 0 },
         chorale: { classes: 0, eleves: 0 },
-        cham: { classes: 0, eleves: 0 }
+        cham: { classes: 0, eleves: 0 },
+        combined: { classes: 0, eleves: 0 }
       };
 
       const schoolMap = {};
@@ -482,12 +493,20 @@
         if (hasCinema) { stats.cinema.classes++; stats.cinema.eleves += eff; schoolMap[schoolKey].cin++; }
         if (hasChorale) { stats.chorale.classes++; stats.chorale.eleves += eff; schoolMap[schoolKey].cho++; }
         if (hasCham) { stats.cham.classes++; stats.cham.eleves += eff; schoolMap[schoolKey].cham++; }
+
+        // Bénéficiaires cumulés : une classe n'est comptée qu'une fois, même si elle bénéficie de plusieurs dispositifs.
+        if (hasParcours || hasPassMusique || hasCinema || hasChorale || hasCham) {
+          stats.combined.classes++;
+          stats.combined.eleves += eff;
+        }
       });
 
       // Affichage des KPI
       document.getElementById('kpi-parcours-classes').textContent = `${stats.parcours.classes} cl.`;
       document.getElementById('kpi-parcours-eleves').textContent = `${stats.parcours.eleves} élèves`;
       document.getElementById('kpi-budget-parcours').textContent = `${stats.parcours.budget.toLocaleString()} €`;
+      document.getElementById('kpi-combined-classes').textContent = `${stats.combined.classes} cl.`;
+      document.getElementById('kpi-combined-eleves').textContent = `${stats.combined.eleves.toLocaleString('fr-FR')} élèves · bénéficiaires d'au moins un dispositif`;
 
       document.getElementById('kpi-passmusique-classes').textContent = `${stats.passMusique.classes} cl.`;
       document.getElementById('kpi-passmusique-eleves').textContent = `${stats.passMusique.eleves} élèves`;
