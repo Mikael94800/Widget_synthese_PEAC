@@ -218,7 +218,7 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
 .peac-analysis-table th{background:#24476b;color:white;text-align:left;white-space:normal}
 .peac-analysis-table th.peac-sortable{cursor:pointer;user-select:none}
 .peac-analysis-table th.peac-sortable:hover{background:#315d87}
-.peac-sort-arrow{display:inline-block;margin-left:4px;font-weight:700;color:#dbeafe}
+.peac-sort-arrow{display:inline-block;margin-left:7px;font-size:1.35rem;line-height:1;font-weight:900;color:#dbeafe;vertical-align:middle}
 .peac-analysis-table td,.peac-analysis-table th{padding:8px 9px;border-bottom:1px solid #e2e8f0}
 .peac-analysis-table td.num{text-align:right;font-variant-numeric:tabular-nums}
 .peac-analysis-table tbody tr:nth-child(even){background:#f7fafc}
@@ -228,6 +228,11 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
 .peac-analysis-kpi span{font-size:.72rem;color:#64748b}
 .peac-analysis-note{font-size:.73rem;color:#64748b;line-height:1.45;margin:8px 0}
 .peac-grid-toolbar{display:flex;align-items:end;gap:9px;flex-wrap:wrap;margin:10px 0}
+.peac-year-select{display:flex;flex-direction:column;gap:4px;min-width:155px;font-size:.72rem;font-weight:700;color:#64748b}
+.peac-year-select select{border:1px solid #cbd5e1;border-radius:6px;padding:7px;background:#fff;color:#334155;min-width:155px;font-size:.85rem}
+.peac-field-detail{border:0;background:transparent;padding:2px 0;color:#1d4f82;font:inherit;font-weight:700;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;cursor:pointer}
+.peac-field-detail:hover{color:#0f766e}
+.peac-analysis-table th.peac-sortable .peac-sort-arrow{font-size:1.3rem;line-height:1;font-weight:900;margin-left:7px}
 .peac-grid-toolbar label{font-size:.72rem;font-weight:700;color:#64748b;display:flex;flex-direction:column;gap:4px}
 .peac-grid-toolbar input,.peac-grid-toolbar select{border:1px solid #cbd5e1;border-radius:6px;padding:7px;background:#fff;color:#334155;min-width:145px}
 .peac-grid-cycle,.peac-grid-status{display:flex;gap:5px;flex-wrap:wrap}
@@ -266,7 +271,7 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
 
 .peac-matrix th .peac-sort-btn{display:flex;width:100%;height:100%;align-items:center;justify-content:center;gap:5px;border:0;background:transparent;color:inherit;font:inherit;font-weight:700;cursor:pointer;padding:2px;line-height:1.15;text-align:center}
 .peac-matrix th.fixed-col .peac-sort-btn{justify-content:flex-start;text-align:left}
-.peac-matrix .peac-sort-arrow{font-size:.8rem;opacity:.72;flex-shrink:0}
+.peac-matrix .peac-sort-arrow{font-size:1.25rem;line-height:1;font-weight:900;opacity:.95;flex-shrink:0}
 .peac-matrix th.sort-active .peac-sort-arrow{opacity:1;color:#ffdf75}
 </style>
 </head>
@@ -375,6 +380,7 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
   <section id="peac-grid-view" aria-label="Grille des attributions PEAC">
     <h2>Grille des attributions PEAC</h2>
     <div class="peac-grid-toolbar">
+      <label class="peac-year-select">Année scolaire<select id="peac-grid-year" onchange="changePeacYear(this.value)"></select></label>
       <div class="peac-grid-cycle"><button id="peac-cycle-ee" class="active" type="button" onclick="setPeacGridCycle('EE')">Élémentaire</button><button id="peac-cycle-em" type="button" onclick="setPeacGridCycle('EM')">Maternelle</button></div>
       <label>Recherche<input id="peac-grid-search" type="search" placeholder="École, classe, enseignant, code…" oninput="renderPeacGrid()"></label>
       <label>Tri<select id="peac-grid-sort" onchange="renderPeacGrid()"><option value="school">École A–Z</option><option value="teacher">Enseignant A–Z</option><option value="level">Niveau</option><option value="effectif">Effectif croissant</option><option value="effectif-desc">Effectif décroissant</option></select></label>
@@ -386,7 +392,8 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
   </section>
   <section id="peac-analysis-view" aria-label="Analyse des champs culturels">
     <h2>Analyse de l’offre et des vœux par champ culturel</h2>
-    <p class="peac-analysis-intro">Cette analyse reprend l’année scolaire sélectionnée dans l’onglet Synthèse. Elle distingue le catalogue des parcours, les classes dont le champ disciplinaire est renseigné comme éligible, les vœux exprimés et les attributions effectivement enregistrées.</p>
+    <div class="peac-grid-toolbar"><label class="peac-year-select">Année scolaire<select id="peac-analysis-year" onchange="changePeacYear(this.value)"></select></label></div>
+    <p class="peac-analysis-intro">Cliquez sur un champ culturel (par exemple « Archéologie ») pour consulter les parcours proposés, leurs partenaires et leurs coûts unitaires.</p>
     <div id="peac-analysis-content"><div class="peac-grid-empty">Les données se chargeront à l’ouverture du widget.</div></div>
   </section>
   <script>
@@ -504,11 +511,15 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
       });
       fillSelect('filter-annee',annees,false); fillSelect('filter-ecole',ecoles,true); fillSelect('filter-cycle',cycles,true);
       buildCheckFilter('niveau',niveaux); buildCheckFilter('discipline',disciplines);
-      const year=document.getElementById('filter-annee'); if(year.options.length&&!year.value)year.selectedIndex=0;
+      const year=document.getElementById('filter-annee');
+      if(year.options.length&&!year.dataset.initialized){const now=new Date(),start=now.getMonth()>=8?now.getFullYear():now.getFullYear()-1;const match=[...year.options].find(o=>{const m=String(o.value).match(/(?:19|20)\d{2}/);return m&&Number(m[0])===start;});if(match)year.value=match.value;else if(!year.value)year.selectedIndex=0;year.dataset.initialized='1';}
+      syncPeacYearSelectors();
       updateDashboard();
     }
 
 
+    function syncPeacYearSelectors(){const source=document.getElementById('filter-annee');if(!source)return;['peac-grid-year','peac-analysis-year'].forEach(id=>{const target=document.getElementById(id);if(!target)return;const value=source.value;target.innerHTML=source.innerHTML;target.value=value;});}
+    function changePeacYear(value){const source=document.getElementById('filter-annee');if(source&&[...source.options].some(o=>o.value===value)){source.value=value;syncPeacYearSelectors();updateDashboard();}}
     let peacGridCycle='EE',peacGridStatus='all';
     function setPeacView(view){document.body.classList.toggle('peac-grid-active',view==='grid');document.body.classList.toggle('peac-analysis-active',view==='analysis');document.getElementById('peac-tab-summary').classList.toggle('active',view==='summary');document.getElementById('peac-tab-grid').classList.toggle('active',view==='grid');document.getElementById('peac-tab-analysis').classList.toggle('active',view==='analysis');if(view==='grid')renderPeacGrid();if(view==='analysis')renderPeacAnalysis();}
     function setPeacGridCycle(c){peacGridCycle=c;document.getElementById('peac-cycle-ee').classList.toggle('active',c==='EE');document.getElementById('peac-cycle-em').classList.toggle('active',c==='EM');renderPeacGrid();}
@@ -690,7 +701,7 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
           ds.forEach(d=>{const s=ensure(d);s.assigned.add(id);if(cyc==='Élémentaire')s.assignedEE.add(id);if(cyc==='Maternelle')s.assignedEM.add(id);});
         }
       });
-      const fieldRows=[...stats.entries()].sort((a,b)=>a[0].localeCompare(b[0],'fr')).map(([field,s])=>'<tr><td><strong>'+escapeHtml(field)+'</strong></td><td class="num">'+s.possible.size+'</td><td class="num">'+s.capacity+'</td><td class="num">'+s.wishClasses.size+'</td><td class="num">'+s.wishes+'</td><td class="num">'+s.assignedEE.size+'</td><td class="num">'+s.assignedEM.size+'</td><td class="num"><strong>'+s.assigned.size+'</strong></td></tr>').join('');
+      const fieldRows=[...stats.entries()].sort((a,b)=>a[0].localeCompare(b[0],'fr')).map(([field,s])=>'<tr><td><button type="button" class="peac-field-detail" onclick="showFieldPathways(\''+escapeHtml(field).replace(/'/g,'&#39;')+'\')">'+escapeHtml(field)+'</button></td><td class="num">'+s.possible.size+'</td><td class="num">'+s.capacity+'</td><td class="num">'+s.wishClasses.size+'</td><td class="num">'+s.wishes+'</td><td class="num">'+s.assignedEE.size+'</td><td class="num">'+s.assignedEM.size+'</td><td class="num"><strong>'+s.assigned.size+'</strong></td></tr>').join('');
       const totalPossible=pathways.size,totalClasses=rows.length,totalWishes=rows.reduce((n,r)=>n+Object.keys(wishDataForRow(r)).length,0),totalAssigned=rows.filter(hasAssignedCode).length,totalWishClasses=rows.filter(r=>Object.keys(wishDataForRow(r)).length>0).length;
       const partnerStats=new Map();
       pathways.forEach(p=>{
@@ -731,6 +742,20 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
         '</tbody></table></div>'+
         '<p class="peac-analysis-note"><strong>Lecture des indicateurs :</strong> les parcours possibles sont les codes distincts du catalogue Table_parcours. Les classes potentiellement bénéficiaires sont estimées par la somme des NbMax des parcours du champ culturel dans Table_parcours. TypeParcours sert uniquement à rattacher un parcours à son champ culturel. Les vœux sont comptés par classe et par parcours demandé ; une même classe peut donc compter plusieurs fois dans le nombre de vœux, mais une seule fois dans le nombre de classes ayant fait un vœu. Les attributions proviennent de CodeParcours dans Table_ecoles. Le tableau des partenaires s’appuie sur le champ Partenaire de Table_voeux associé au CodeParcours.</p>';
       enablePeacAnalysisSorting(host);
+    }
+
+    function showFieldPathways(field){
+      const entries=(parcoursRecords||[]).filter(p=>getDisciplines({TypeParcours:p.TypeParcours,NomParcours:p.NomParcours,CodeParcours:p.CodeParcours??p.Code??p.Code_parcours}).some(d=>d===field)).map(p=>{
+        const code=String(p.CodeParcours??p.Code??p.Code_parcours??'').trim();
+        const name=String(p.NomParcours??p.Parcours??p.LibelleParcours??('Parcours '+code)).trim();
+        const raw=p.CoutUnitaire,cost=raw===null||raw===undefined||raw===''?null:numericCost(raw);
+        const partners=voeuxMap[code]?[...voeuxMap[code]]:[];
+        return {name,cost,partners};
+      }).sort((a,b)=>a.name.localeCompare(b.name,'fr'));
+      document.getElementById('detail-title').textContent=field+' — Parcours proposés';
+      const rows=entries.map(p=>'<tr><td>'+escapeHtml(p.name)+'</td><td>'+escapeHtml(p.partners.join(' / ')||'Non renseigné')+'</td><td style="text-align:right">'+(p.cost===null?'Non renseigné':p.cost.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €')+'</td></tr>').join('');
+      document.getElementById('detail-content').innerHTML=entries.length?'<div><strong>'+entries.length+' parcours</strong> dans le champ « '+escapeHtml(field)+' ».</div><table><thead><tr><th>Parcours</th><th>Partenaire(s)</th><th>Coût unitaire</th></tr></thead><tbody>'+rows+'</tbody></table>':'<p>Aucun parcours trouvé dans Table_parcours pour ce champ culturel.</p>';
+      document.getElementById('detail-modal').classList.add('open');
     }
 
     function enablePeacAnalysisSorting(host){
