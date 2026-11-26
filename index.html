@@ -216,6 +216,9 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
 .peac-analysis-table-wrap{overflow-x:auto;border:1px solid #dbe3ec;border-radius:7px;margin:8px 0 16px}
 .peac-analysis-table{min-width:760px;width:100%;border-collapse:collapse;font-size:.78rem}
 .peac-analysis-table th{background:#24476b;color:white;text-align:left;white-space:normal}
+.peac-analysis-table th.peac-sortable{cursor:pointer;user-select:none}
+.peac-analysis-table th.peac-sortable:hover{background:#315d87}
+.peac-sort-arrow{display:inline-block;margin-left:4px;font-weight:700;color:#dbeafe}
 .peac-analysis-table td,.peac-analysis-table th{padding:8px 9px;border-bottom:1px solid #e2e8f0}
 .peac-analysis-table td.num{text-align:right;font-variant-numeric:tabular-nums}
 .peac-analysis-table tbody tr:nth-child(even){background:#f7fafc}
@@ -667,15 +670,15 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
         if(!code)return;
         const name=String(p.NomParcours??p.Parcours??p.LibelleParcours??('Parcours '+code)).trim();
         const disciplines=getDisciplines({TypeParcours:p.TypeParcours,NomParcours:p.NomParcours,CodeParcours:code});
-        pathways.set(code,{code,name,disciplines:disciplines.length?disciplines:['Champ non renseigné']});
+        pathways.set(code,{code,name,nbMax:Number(p.NbMax)||0,disciplines:disciplines.length?disciplines:['Champ non renseigné']});
       });
       const stats=new Map();
-      const ensure=field=>{if(!stats.has(field))stats.set(field,{possible:new Set(),eligible:new Set(),wishClasses:new Set(),wishes:0,assigned:new Set(),assignedEE:new Set(),assignedEM:new Set()});return stats.get(field);};
-      pathways.forEach(p=>p.disciplines.forEach(d=>ensure(d).possible.add(p.code)));
+      const ensure=field=>{if(!stats.has(field))stats.set(field,{possible:new Set(),capacity:0,wishClasses:new Set(),wishes:0,assigned:new Set(),assignedEE:new Set(),assignedEM:new Set()});return stats.get(field);};
+      pathways.forEach(p=>p.disciplines.forEach(d=>{const s=ensure(d);s.possible.add(p.code);s.capacity+=p.nbMax;}));
       rows.forEach((r,index)=>{
         const id=String(r.id??(r.Ecole+'|'+(r.Enseignant||r.Classe||r.NomClasse)+'|'+index));
         const cyc=cycleName(r);
-        getDisciplines(r).forEach(d=>ensure(d).eligible.add(id));
+        // La capacité théorique provient de NbMax dans Table_parcours.
         const wishes=wishDataForRow(r);
         Object.keys(wishes).forEach(code=>{
           const p=pathways.get(code),ds=p?.disciplines?.length?p.disciplines:['Champ non renseigné'];
@@ -687,7 +690,7 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
           ds.forEach(d=>{const s=ensure(d);s.assigned.add(id);if(cyc==='Élémentaire')s.assignedEE.add(id);if(cyc==='Maternelle')s.assignedEM.add(id);});
         }
       });
-      const fieldRows=[...stats.entries()].sort((a,b)=>a[0].localeCompare(b[0],'fr')).map(([field,s])=>'<tr><td><strong>'+escapeHtml(field)+'</strong></td><td class="num">'+s.possible.size+'</td><td class="num">'+s.eligible.size+'</td><td class="num">'+s.wishClasses.size+'</td><td class="num">'+s.wishes+'</td><td class="num">'+s.assignedEE.size+'</td><td class="num">'+s.assignedEM.size+'</td><td class="num"><strong>'+s.assigned.size+'</strong></td></tr>').join('');
+      const fieldRows=[...stats.entries()].sort((a,b)=>a[0].localeCompare(b[0],'fr')).map(([field,s])=>'<tr><td><strong>'+escapeHtml(field)+'</strong></td><td class="num">'+s.possible.size+'</td><td class="num">'+s.capacity+'</td><td class="num">'+s.wishClasses.size+'</td><td class="num">'+s.wishes+'</td><td class="num">'+s.assignedEE.size+'</td><td class="num">'+s.assignedEM.size+'</td><td class="num"><strong>'+s.assigned.size+'</strong></td></tr>').join('');
       const totalPossible=pathways.size,totalClasses=rows.length,totalWishes=rows.reduce((n,r)=>n+Object.keys(wishDataForRow(r)).length,0),totalAssigned=rows.filter(hasAssignedCode).length,totalWishClasses=rows.filter(r=>Object.keys(wishDataForRow(r)).length>0).length;
       const partnerStats=new Map();
       pathways.forEach(p=>{
@@ -715,7 +718,7 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
         '<div class="peac-analysis-kpi"><strong>'+totalAssigned+'</strong><span>Classes avec attribution ('+percent(totalAssigned,totalClasses)+')</span></div>'+
         '<div class="peac-analysis-kpi"><strong>'+totalWishes+'</strong><span>Vœux individuels identifiés</span></div></div>'+
         '<h3 class="peac-analysis-section">Offre, éligibilité, vœux et attributions par champ culturel</h3>'+
-        '<div class="peac-analysis-table-wrap"><table class="peac-analysis-table"><thead><tr><th>Champ culturel</th><th>Parcours possibles</th><th>Classes potentiellement bénéficiaires</th><th>Classes ayant fait au moins un vœu</th><th>Nombre de vœux</th><th>Attribuées Élémentaire</th><th>Attribuées Maternelle</th><th>Total attribuées</th></tr></thead><tbody>'+
+        '<div class="peac-analysis-table-wrap"><table class="peac-analysis-table"><thead><tr><th>Champ culturel</th><th>Parcours possibles</th><th>Capacité théorique (Σ NbMax)</th><th>Classes ayant fait au moins un vœu</th><th>Nombre de vœux</th><th>Attribuées Élémentaire</th><th>Attribuées Maternelle</th><th>Total attribuées</th></tr></thead><tbody>'+
         (fieldRows||'<tr><td colspan="8">Aucune donnée disciplinaire exploitable.</td></tr>')+
         '</tbody></table></div>'+
         '<h3 class="peac-analysis-section">Vœux par champ culturel</h3>'+
@@ -726,7 +729,27 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
         '<div class="peac-analysis-table-wrap"><table class="peac-analysis-table"><thead><tr><th>Partenaire</th><th>Parcours distincts associés</th><th>Champs culturels</th><th>Classes attribuées</th></tr></thead><tbody>'+
         (partnerRows||'<tr><td colspan="4">Aucun partenaire renseigné dans Table_voeux pour les parcours de cette année.</td></tr>')+
         '</tbody></table></div>'+
-        '<p class="peac-analysis-note"><strong>Lecture des indicateurs :</strong> les parcours possibles sont les codes distincts du catalogue Table_parcours. Les classes potentiellement bénéficiaires sont les lignes de Table_ecoles dont le champ TypeParcours permet d’identifier le champ culturel. Les vœux sont comptés par classe et par parcours demandé ; une même classe peut donc compter plusieurs fois dans le nombre de vœux, mais une seule fois dans le nombre de classes ayant fait un vœu. Les attributions proviennent de CodeParcours dans Table_ecoles. Le tableau des partenaires s’appuie sur le champ Partenaire de Table_voeux associé au CodeParcours.</p>';
+        '<p class="peac-analysis-note"><strong>Lecture des indicateurs :</strong> les parcours possibles sont les codes distincts du catalogue Table_parcours. Les classes potentiellement bénéficiaires sont estimées par la somme des NbMax des parcours du champ culturel dans Table_parcours. TypeParcours sert uniquement à rattacher un parcours à son champ culturel. Les vœux sont comptés par classe et par parcours demandé ; une même classe peut donc compter plusieurs fois dans le nombre de vœux, mais une seule fois dans le nombre de classes ayant fait un vœu. Les attributions proviennent de CodeParcours dans Table_ecoles. Le tableau des partenaires s’appuie sur le champ Partenaire de Table_voeux associé au CodeParcours.</p>';
+      enablePeacAnalysisSorting(host);
+    }
+
+    function enablePeacAnalysisSorting(host){
+      host.querySelectorAll('.peac-analysis-table').forEach(table=>{
+        const headers=[...table.querySelectorAll('thead th')];
+        headers.forEach((th,col)=>{
+          th.classList.add('peac-sortable');th.setAttribute('role','button');th.setAttribute('tabindex','0');
+          th.innerHTML=th.textContent.trim()+' <span class="peac-sort-arrow" aria-hidden="true">↕</span>';
+          const sort=()=>{
+            const direction=th.dataset.sortDirection==='asc'?'desc':'asc';
+            headers.forEach(h=>{delete h.dataset.sortDirection;const a=h.querySelector('.peac-sort-arrow');if(a)a.textContent='↕';});
+            th.dataset.sortDirection=direction;const arrow=th.querySelector('.peac-sort-arrow');if(arrow)arrow.textContent=direction==='asc'?'↑':'↓';
+            const body=table.querySelector('tbody'),trs=[...body.querySelectorAll('tr')];
+            const val=tr=>{const cell=tr.cells[col];if(!cell)return '';const raw=cell.textContent.trim().replace(/\s/g,'').replace('%','').replace(/€/g,'').replace(/,/g,'.');const n=Number(raw);return raw!==''&&Number.isFinite(n)?n:cell.textContent.trim().toLocaleLowerCase('fr');};
+            trs.sort((a,b)=>{const x=val(a),y=val(b);const cmp=typeof x==='number'&&typeof y==='number'?x-y:String(x).localeCompare(String(y),'fr',{numeric:true,sensitivity:'base'});return cmp*(direction==='asc'?1:-1);});trs.forEach(tr=>body.appendChild(tr));
+          };
+          th.addEventListener('click',sort);th.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();sort();}});
+        });
+      });
     }
 
     function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
