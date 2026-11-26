@@ -566,8 +566,8 @@
         if(!teacher||vt!==teacher||(vs&&school&&vs!==school))return;
         Object.keys(v).forEach(key=>{
           const val=v[key];
-          if(typeof val==='string'&&/(?:^|\|\s*)\d+\s*[:.)-]\s*\d+/.test(val) Object.assign(out,parseWishesText(val));
-          else if(Array.isArray(val))val.forEach(x=>{if(typeof x==='string'&&/(?:^|\|\s*)\d+\s*[:.)-]\s*\d+/.test(x) Object.assign(out,parseWishesText(x));});
+          if(typeof val==='string'&&/(?:^|\|\s*)\d+\s*[:.)-]\s*\d+/.test(val)) Object.assign(out,parseWishesText(val));
+          else if(Array.isArray(val))val.forEach(x=>{if(typeof x==='string'&&/(?:^|\|\s*)\d+\s*[:.)-]\s*\d+/.test(x)) Object.assign(out,parseWishesText(x));});
         });
         const c=String(v.CodeParcours??v.Code??v.Code_parcours??'').trim(),
           rank=Number(v.RangVoeu??v.Rang??v.OrdreVoeu??v.Ordre??v.NumeroVoeu??v.NumVoeu??v.Priorite??v.Priorité);
