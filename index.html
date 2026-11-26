@@ -376,6 +376,7 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
     </table>
   </div>
   <div class="toolbar"><button class="action-btn" type="button" onclick="exportWorkbook()">Exporter la synthèse Excel</button><button class="action-btn" type="button" onclick="exportAnnualWord()">Exporter la synthèse annuelle Word</button></div><div class="status-note" id="data-status">Chargement des données Grist…</div>
+  </div>
   <div class="modal-backdrop" id="detail-modal" onclick="if(event.target===this)closeDetail()">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="detail-title">
       <div class="modal-head"><h2 id="detail-title">Parcours attribués</h2><button class="modal-close" onclick="closeDetail()">Fermer ✕</button></div>
@@ -383,7 +384,6 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
     </div>
   </div>
 
-  </div>
   <section id="peac-grid-view" aria-label="Grille des attributions PEAC">
     <h2>Grille des attributions PEAC</h2>
     <div class="peac-grid-toolbar">
@@ -711,7 +711,7 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
           ds.forEach(d=>{const s=ensure(d);s.assigned.add(id);if(cyc==='Élémentaire')s.assignedEE.add(id);if(cyc==='Maternelle')s.assignedEM.add(id);});
         }
       });
-      const fieldRows=[...stats.entries()].sort((a,b)=>a[0].localeCompare(b[0],'fr')).map(([field,s])=>'<tr><td><button type="button" class="peac-field-detail" onclick="showFieldPathways(\''+escapeHtml(field).replace(/'/g,'&#39;')+'\')">'+escapeHtml(field)+'</button></td><td class="num">'+s.possible.size+'</td><td class="num">'+s.capacity+'</td><td class="num">'+s.wishClasses.size+'</td><td class="num">'+s.wishes+'</td><td class="num">'+s.assignedEE.size+'</td><td class="num">'+s.assignedEM.size+'</td><td class="num"><strong>'+s.assigned.size+'</strong></td></tr>').join('');
+      const fieldRows=[...stats.entries()].sort((a,b)=>a[0].localeCompare(b[0],'fr')).map(([field,s])=>'<tr><td><button type="button" class="peac-field-detail" data-field="'+escapeHtml(field)+'">'+escapeHtml(field)+'</button></td><td class="num">'+s.possible.size+'</td><td class="num">'+s.capacity+'</td><td class="num">'+s.wishClasses.size+'</td><td class="num">'+s.wishes+'</td><td class="num">'+s.assignedEE.size+'</td><td class="num">'+s.assignedEM.size+'</td><td class="num"><strong>'+s.assigned.size+'</strong></td></tr>').join('');
       const totalPossible=pathways.size,totalClasses=rows.length,totalWishes=rows.reduce((n,r)=>n+Object.keys(wishDataForRow(r)).length,0),totalAssigned=rows.filter(hasAssignedCode).length,totalWishClasses=rows.filter(r=>Object.keys(wishDataForRow(r)).length>0).length;
       const partnerStats=new Map();
       pathways.forEach(p=>{
@@ -751,6 +751,7 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
         (partnerRows||'<tr><td colspan="4">Aucun partenaire renseigné dans Table_voeux pour les parcours de cette année.</td></tr>')+
         '</tbody></table></div>'+
         '<p class="peac-analysis-note"><strong>Lecture des indicateurs :</strong> les parcours possibles sont les codes distincts du catalogue Table_parcours. Les classes potentiellement bénéficiaires sont estimées par la somme des NbMax des parcours du champ culturel dans Table_parcours. TypeParcours sert uniquement à rattacher un parcours à son champ culturel. Les vœux sont comptés par classe et par parcours demandé ; une même classe peut donc compter plusieurs fois dans le nombre de vœux, mais une seule fois dans le nombre de classes ayant fait un vœu. Les attributions proviennent de CodeParcours dans Table_ecoles. Le tableau des partenaires s’appuie sur le champ Partenaire de Table_voeux associé au CodeParcours.</p>';
+      host.querySelectorAll('.peac-field-detail').forEach(button=>button.addEventListener('click',()=>showFieldPathways(button.dataset.field)));
       enablePeacAnalysisSorting(host);
     }
 
