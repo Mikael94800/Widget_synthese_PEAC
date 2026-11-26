@@ -548,7 +548,7 @@
       const out={},text=String(raw??'').trim();
       if(!text)return out;
       // Format Framaforms : « 1: 117 Nom du parcours | 2: 116 ... »
-      const re=/(?:^|\\|\\s*)(\\d+)\\s*[:.)-]\\s*(\\d+)(?:\\s+([^|]*))?/g;
+      const re=/(?:^|\|\s*)(\d+)\s*[:.)-]\s*(\d+)(?:\s+([^|]*))?/g;
       let m;
       while((m=re.exec(text))!==null){
         const rank=Number(m[1]),code=String(m[2]).trim();
@@ -558,22 +558,17 @@
     }
     function wishDataForRow(r){
       const out={};
-      // Supporte aussi les champs de vœux directement présents dans Table_ecoles.
       ['Voeux','VoeuxExprimes','Voeux_exprimes','Vœux','VœuxExprimes'].forEach(k=>Object.assign(out,parseWishesText(r[k])));
       const teacher=normalizeKey(r.Enseignant||r.NomEnseignant||r.Professeur||r.Classe||r.NomClasse),school=normalizeKey(r.Ecole||r.École);
       (voeuxRecords||[]).forEach(v=>{
         const vt=normalizeKey(v.Enseignant||v.NomEnseignant||v.Professeur||v.Classe||v.NomClasse||v.Nom||v.NomAgent||v.NomComplet),
           vs=normalizeKey(v.Ecole||v.École||v.Structure||v.Etablissement||v.EtablissementScolaire);
         if(!teacher||vt!==teacher||(vs&&school&&vs!==school))return;
-        // Parse the single text cell regardless of its column name.
         Object.keys(v).forEach(key=>{
           const val=v[key];
-          if(typeof val==='string'&&/(?:^|\\|\\s*)\\d+\\s*[:.)-]\\s*\\d+/.test(val))
-            Object.assign(out,parseWishesText(val));
-          else if(Array.isArray(val))
-            val.forEach(x=>{if(typeof x==='string'&&/(?:^|\\|\\s*)\\d+\\s*[:.)-]\\s*\\d+/.test(x) Object.assign(out,parseWishesText(x));});
+          if(typeof val==='string'&&/(?:^|\|\s*)\d+\s*[:.)-]\s*\d+/.test(val) Object.assign(out,parseWishesText(val));
+          else if(Array.isArray(val))val.forEach(x=>{if(typeof x==='string'&&/(?:^|\|\s*)\d+\s*[:.)-]\s*\d+/.test(x) Object.assign(out,parseWishesText(x));});
         });
-        // Retains compatibility with legacy normalized rows (one code/rank per row).
         const c=String(v.CodeParcours??v.Code??v.Code_parcours??'').trim(),
           rank=Number(v.RangVoeu??v.Rang??v.OrdreVoeu??v.Ordre??v.NumeroVoeu??v.NumVoeu??v.Priorite??v.Priorité);
         if(c&&Number.isFinite(rank)&&rank>0)out[c]=rank;
