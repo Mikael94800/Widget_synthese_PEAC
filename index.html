@@ -554,6 +554,7 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
       wrap.innerHTML='<table class="peac-matrix peac-matrix">'+top+body+'</table>';
     }
     function updateDashboard() {
+      syncPeacYearSelectors();
       const selAnnee = document.getElementById('filter-annee').value;
       const selEcole = document.getElementById('filter-ecole').value;
       const selCycle = document.getElementById('filter-cycle').value;
@@ -749,7 +750,7 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
         const code=String(p.CodeParcours??p.Code??p.Code_parcours??'').trim();
         const name=String(p.NomParcours??p.Parcours??p.LibelleParcours??('Parcours '+code)).trim();
         const raw=p.CoutUnitaire,cost=raw===null||raw===undefined||raw===''?null:numericCost(raw);
-        const partners=voeuxMap[code]?[...voeuxMap[code]]:[];
+        const partners=[...new Set([...(extractValues(p.Partenaire)),...(voeuxMap[code]?[...voeuxMap[code]]:[])])];
         return {name,cost,partners};
       }).sort((a,b)=>a.name.localeCompare(b.name,'fr'));
       document.getElementById('detail-title').textContent=field+' — Parcours proposés';
