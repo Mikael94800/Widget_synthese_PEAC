@@ -207,8 +207,23 @@
 .peac-view-tabs button{border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#334155;padding:9px 13px;font-weight:700;cursor:pointer}
 .peac-view-tabs button.active{background:#1a365d;color:#fff;border-color:#1a365d}
 #peac-grid-view{display:none;border:1px solid var(--border);background:#fff;border-radius:10px;padding:12px;margin:12px 0}
-body.peac-grid-active #summary-view{display:none!important}
+body.peac-grid-active #summary-view,body.peac-analysis-active #summary-view{display:none!important}
 body.peac-grid-active #peac-grid-view{display:block!important}
+#peac-analysis-view{display:none;border:1px solid var(--border);background:#fff;border-radius:10px;padding:14px;margin:12px 0}
+body.peac-analysis-active #peac-analysis-view{display:block!important}
+.peac-analysis-intro{font-size:.84rem;color:#526174;line-height:1.45;margin:4px 0 14px}
+.peac-analysis-section{margin:18px 0 10px;color:#1a365d;font-size:1rem}
+.peac-analysis-table-wrap{overflow-x:auto;border:1px solid #dbe3ec;border-radius:7px;margin:8px 0 16px}
+.peac-analysis-table{min-width:760px;width:100%;border-collapse:collapse;font-size:.78rem}
+.peac-analysis-table th{background:#24476b;color:white;text-align:left;white-space:normal}
+.peac-analysis-table td,.peac-analysis-table th{padding:8px 9px;border-bottom:1px solid #e2e8f0}
+.peac-analysis-table td.num{text-align:right;font-variant-numeric:tabular-nums}
+.peac-analysis-table tbody tr:nth-child(even){background:#f7fafc}
+.peac-analysis-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;margin:10px 0}
+.peac-analysis-kpi{background:#f7fafc;border:1px solid #e2e8f0;border-left:4px solid #2b6cb0;border-radius:7px;padding:10px}
+.peac-analysis-kpi strong{display:block;font-size:1.2rem;color:#1a365d}
+.peac-analysis-kpi span{font-size:.72rem;color:#64748b}
+.peac-analysis-note{font-size:.73rem;color:#64748b;line-height:1.45;margin:8px 0}
 .peac-grid-toolbar{display:flex;align-items:end;gap:9px;flex-wrap:wrap;margin:10px 0}
 .peac-grid-toolbar label{font-size:.72rem;font-weight:700;color:#64748b;display:flex;flex-direction:column;gap:4px}
 .peac-grid-toolbar input,.peac-grid-toolbar select{border:1px solid #cbd5e1;border-radius:6px;padding:7px;background:#fff;color:#334155;min-width:145px}
@@ -256,7 +271,7 @@ body.peac-grid-active #peac-grid-view{display:block!important}
 
   <h2>📊 Synthèse PEAC, Dispositifs & Budget — V9</h2>
 
-  <div class="peac-view-tabs"><button id="peac-tab-summary" class="active" type="button" onclick="setPeacView('summary')">Synthèse</button><button id="peac-tab-grid" type="button" onclick="setPeacView('grid')">Grille des attributions</button></div>
+  <div class="peac-view-tabs"><button id="peac-tab-summary" class="active" type="button" onclick="setPeacView('summary')">Synthèse</button><button id="peac-tab-grid" type="button" onclick="setPeacView('grid')">Grille des attributions</button><button id="peac-tab-analysis" type="button" onclick="setPeacView('analysis')">Champs culturels</button></div>
   <div id="summary-view">
   <!-- FILTRES CROISÉS -->
   <div class="filters-bar">
@@ -365,6 +380,11 @@ body.peac-grid-active #peac-grid-view{display:block!important}
     <div id="peac-grid-summary" class="peac-grid-summary"></div>
     <div class="peac-grid-scroll" id="peac-grid-table-wrap"><div class="peac-grid-empty">Les données se chargeront à l'ouverture du widget.</div></div>
     <div class="status-note">Lecture seule : tris et filtres de cette grille ne modifient pas les données Grist.</div>
+  </section>
+  <section id="peac-analysis-view" aria-label="Analyse des champs culturels">
+    <h2>Analyse de l’offre et des vœux par champ culturel</h2>
+    <p class="peac-analysis-intro">Cette analyse reprend l’année scolaire sélectionnée dans l’onglet Synthèse. Elle distingue le catalogue des parcours, les classes dont le champ disciplinaire est renseigné comme éligible, les vœux exprimés et les attributions effectivement enregistrées.</p>
+    <div id="peac-analysis-content"><div class="peac-grid-empty">Les données se chargeront à l’ouverture du widget.</div></div>
   </section>
   <script>
     let ecolesRecords = [];
@@ -487,7 +507,7 @@ body.peac-grid-active #peac-grid-view{display:block!important}
 
 
     let peacGridCycle='EE',peacGridStatus='all';
-    function setPeacView(view){document.body.classList.toggle('peac-grid-active',view==='grid');document.getElementById('peac-tab-summary').classList.toggle('active',view==='summary');document.getElementById('peac-tab-grid').classList.toggle('active',view==='grid');if(view==='grid')renderPeacGrid();}
+    function setPeacView(view){document.body.classList.toggle('peac-grid-active',view==='grid');document.body.classList.toggle('peac-analysis-active',view==='analysis');document.getElementById('peac-tab-summary').classList.toggle('active',view==='summary');document.getElementById('peac-tab-grid').classList.toggle('active',view==='grid');document.getElementById('peac-tab-analysis').classList.toggle('active',view==='analysis');if(view==='grid')renderPeacGrid();if(view==='analysis')renderPeacAnalysis();}
     function setPeacGridCycle(c){peacGridCycle=c;document.getElementById('peac-cycle-ee').classList.toggle('active',c==='EE');document.getElementById('peac-cycle-em').classList.toggle('active',c==='EM');renderPeacGrid();}
     function setPeacGridStatus(st){peacGridStatus=st;document.querySelectorAll('[data-grid-status]').forEach(b=>b.classList.toggle('active',b.dataset.gridStatus===st));renderPeacGrid();}
     function peacGridDevice(r,key){return dispositif(r,key);}
@@ -629,6 +649,84 @@ body.peac-grid-active #peac-grid-view{display:block!important}
         tr.querySelector('button').addEventListener('click',()=>showDetail(d)); tbody.appendChild(tr);
       });
       renderPeacGrid();
+      if(document.body.classList.contains('peac-analysis-active'))renderPeacAnalysis();
+    }
+
+
+    function renderPeacAnalysis(){
+      const host=document.getElementById('peac-analysis-content');
+      if(!host||!Array.isArray(ecolesRecords)||!sourceRecordsLoaded)return;
+      const year=document.getElementById('filter-annee')?.value||'';
+      const rows=ecolesRecords.filter(r=>String(r.AnneeScolaire||'').trim()===year);
+      const isEE=r=>/élémentaire|elementaire|^ee$/i.test(String(r.Cycle||''));
+      const isEM=r=>/maternelle|^em$/i.test(String(r.Cycle||''));
+      const cycleName=r=>isEE(r)?'Élémentaire':isEM(r)?'Maternelle':'Autre / non renseigné';
+      const pathways=new Map();
+      (parcoursRecords||[]).forEach(p=>{
+        const code=String(p.CodeParcours??p.Code??p.Code_parcours??'').trim();
+        if(!code)return;
+        const name=String(p.NomParcours??p.Parcours??p.LibelleParcours??('Parcours '+code)).trim();
+        const disciplines=getDisciplines({TypeParcours:p.TypeParcours,NomParcours:p.NomParcours,CodeParcours:code});
+        pathways.set(code,{code,name,disciplines:disciplines.length?disciplines:['Champ non renseigné']});
+      });
+      const stats=new Map();
+      const ensure=field=>{if(!stats.has(field))stats.set(field,{possible:new Set(),eligible:new Set(),wishClasses:new Set(),wishes:0,assigned:new Set(),assignedEE:new Set(),assignedEM:new Set()});return stats.get(field);};
+      pathways.forEach(p=>p.disciplines.forEach(d=>ensure(d).possible.add(p.code)));
+      rows.forEach((r,index)=>{
+        const id=String(r.id??(r.Ecole+'|'+(r.Enseignant||r.Classe||r.NomClasse)+'|'+index));
+        const cyc=cycleName(r);
+        getDisciplines(r).forEach(d=>ensure(d).eligible.add(id));
+        const wishes=wishDataForRow(r);
+        Object.keys(wishes).forEach(code=>{
+          const p=pathways.get(code),ds=p?.disciplines?.length?p.disciplines:['Champ non renseigné'];
+          ds.forEach(d=>{const s=ensure(d);s.wishClasses.add(id);s.wishes++;});
+        });
+        if(hasAssignedCode(r)){
+          const code=String(r.CodeParcours).trim(),p=pathways.get(code),ownDisciplines=getDisciplines(r);
+          const ds=p?.disciplines?.length?p.disciplines:ownDisciplines.length?ownDisciplines:['Champ non renseigné'];
+          ds.forEach(d=>{const s=ensure(d);s.assigned.add(id);if(cyc==='Élémentaire')s.assignedEE.add(id);if(cyc==='Maternelle')s.assignedEM.add(id);});
+        }
+      });
+      const fieldRows=[...stats.entries()].sort((a,b)=>a[0].localeCompare(b[0],'fr')).map(([field,s])=>'<tr><td><strong>'+escapeHtml(field)+'</strong></td><td class="num">'+s.possible.size+'</td><td class="num">'+s.eligible.size+'</td><td class="num">'+s.wishClasses.size+'</td><td class="num">'+s.wishes+'</td><td class="num">'+s.assignedEE.size+'</td><td class="num">'+s.assignedEM.size+'</td><td class="num"><strong>'+s.assigned.size+'</strong></td></tr>').join('');
+      const totalPossible=pathways.size,totalClasses=rows.length,totalWishes=rows.reduce((n,r)=>n+Object.keys(wishDataForRow(r)).length,0),totalAssigned=rows.filter(hasAssignedCode).length,totalWishClasses=rows.filter(r=>Object.keys(wishDataForRow(r)).length>0).length;
+      const partnerStats=new Map();
+      pathways.forEach(p=>{
+        const partners=voeuxMap[p.code]?[...voeuxMap[p.code]]:[];
+        partners.forEach(partner=>{
+          if(!partnerStats.has(partner))partnerStats.set(partner,{codes:new Set(),fields:new Set(),assigned:new Set()});
+          const s=partnerStats.get(partner);s.codes.add(p.code);p.disciplines.forEach(d=>s.fields.add(d));
+        });
+      });
+      rows.forEach((r,i)=>{
+        if(!hasAssignedCode(r))return;
+        const code=String(r.CodeParcours).trim(),partners=voeuxMap[code]?[...voeuxMap[code]]:[];
+        partners.forEach(partner=>{
+          if(!partnerStats.has(partner))partnerStats.set(partner,{codes:new Set([code]),fields:new Set(),assigned:new Set()});
+          const s=partnerStats.get(partner);s.assigned.add(String(r.id??(r.Ecole+'|'+(r.Enseignant||r.Classe||r.NomClasse)+'|'+i)));
+        });
+      });
+      const partnerRows=[...partnerStats.entries()].sort((a,b)=>a[0].localeCompare(b[0],'fr')).map(([partner,s])=>'<tr><td><strong>'+escapeHtml(partner)+'</strong></td><td class="num">'+s.codes.size+'</td><td>'+escapeHtml([...s.fields].sort((a,b)=>a.localeCompare(b,'fr')).join(', ')||'Non renseigné')+'</td><td class="num">'+s.assigned.size+'</td></tr>').join('');
+      const percent=(n,d)=>d?((100*n/d).toLocaleString('fr-FR',{maximumFractionDigits:1})+' %'):'—';
+      host.innerHTML=
+        '<div class="peac-analysis-kpis">'+
+        '<div class="peac-analysis-kpi"><strong>'+totalPossible+'</strong><span>Parcours distincts dans le catalogue</span></div>'+
+        '<div class="peac-analysis-kpi"><strong>'+totalClasses+'</strong><span>Classes recensées pour l’année</span></div>'+
+        '<div class="peac-analysis-kpi"><strong>'+totalWishClasses+'</strong><span>Classes ayant formulé au moins un vœu ('+percent(totalWishClasses,totalClasses)+')</span></div>'+
+        '<div class="peac-analysis-kpi"><strong>'+totalAssigned+'</strong><span>Classes avec attribution ('+percent(totalAssigned,totalClasses)+')</span></div>'+
+        '<div class="peac-analysis-kpi"><strong>'+totalWishes+'</strong><span>Vœux individuels identifiés</span></div></div>'+
+        '<h3 class="peac-analysis-section">Offre, éligibilité, vœux et attributions par champ culturel</h3>'+
+        '<div class="peac-analysis-table-wrap"><table class="peac-analysis-table"><thead><tr><th>Champ culturel</th><th>Parcours possibles</th><th>Classes potentiellement bénéficiaires</th><th>Classes ayant fait au moins un vœu</th><th>Nombre de vœux</th><th>Attribuées Élémentaire</th><th>Attribuées Maternelle</th><th>Total attribuées</th></tr></thead><tbody>'+
+        (fieldRows||'<tr><td colspan="8">Aucune donnée disciplinaire exploitable.</td></tr>')+
+        '</tbody></table></div>'+
+        '<h3 class="peac-analysis-section">Vœux par champ culturel</h3>'+
+        '<div class="peac-analysis-table-wrap"><table class="peac-analysis-table"><thead><tr><th>Champ culturel</th><th>Nombre de vœux</th><th>Part de l’ensemble des vœux</th><th>Classes ayant exprimé un vœu</th></tr></thead><tbody>'+
+        ([...stats.entries()].sort((a,b)=>b[1].wishes-a[1].wishes||a[0].localeCompare(b[0],'fr')).map(([field,s])=>'<tr><td><strong>'+escapeHtml(field)+'</strong></td><td class="num">'+s.wishes+'</td><td class="num">'+percent(s.wishes,totalWishes)+'</td><td class="num">'+s.wishClasses.size+'</td></tr>').join('')||'<tr><td colspan="4">Aucun vœu reconnu pour cette année.</td></tr>')+
+        '</tbody></table></div>'+
+        '<h3 class="peac-analysis-section">Parcours et attributions par partenaire</h3>'+
+        '<div class="peac-analysis-table-wrap"><table class="peac-analysis-table"><thead><tr><th>Partenaire</th><th>Parcours distincts associés</th><th>Champs culturels</th><th>Classes attribuées</th></tr></thead><tbody>'+
+        (partnerRows||'<tr><td colspan="4">Aucun partenaire renseigné dans Table_voeux pour les parcours de cette année.</td></tr>')+
+        '</tbody></table></div>'+
+        '<p class="peac-analysis-note"><strong>Lecture des indicateurs :</strong> les parcours possibles sont les codes distincts du catalogue Table_parcours. Les classes potentiellement bénéficiaires sont les lignes de Table_ecoles dont le champ TypeParcours permet d’identifier le champ culturel. Les vœux sont comptés par classe et par parcours demandé ; une même classe peut donc compter plusieurs fois dans le nombre de vœux, mais une seule fois dans le nombre de classes ayant fait un vœu. Les attributions proviennent de CodeParcours dans Table_ecoles. Le tableau des partenaires s’appuie sur le champ Partenaire de Table_voeux associé au CodeParcours.</p>';
     }
 
     function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
