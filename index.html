@@ -490,7 +490,7 @@ body.peac-grid-active #peac-grid-view{display:block!important}
     function setPeacGridCycle(c){peacGridCycle=c;document.getElementById('peac-cycle-ee').classList.toggle('active',c==='EE');document.getElementById('peac-cycle-em').classList.toggle('active',c==='EM');renderPeacGrid();}
     function setPeacGridStatus(st){peacGridStatus=st;document.querySelectorAll('[data-grid-status]').forEach(b=>b.classList.toggle('active',b.dataset.gridStatus===st));renderPeacGrid();}
     function peacGridDevice(r,key){return dispositif(r,key);}
-    function peacGridHeaderSort(key){if(peacGridHeaderSort===null)return null;return peacGridHeaderSort.key===key?peacGridHeaderSort.dir:null;}
+    let peacGridHeaderSort=null;
     function peacGridSortClick(key){if(peacGridHeaderSort&&peacGridHeaderSort.key===key)peacGridHeaderSort.dir=peacGridHeaderSort.dir==='asc'?'desc':'asc';else peacGridHeaderSort={key,dir:'asc'};renderPeacGrid();}
     function peacGridHeader(label,key,classes=''){const active=peacGridHeaderSort&&peacGridHeaderSort.key===key,dir=active?peacGridHeaderSort.dir:null,arrow=dir==='asc'?'▲':dir==='desc'?'▼':'↕';return '<th class="'+classes+(active?' sort-active':'')+'"><button type="button" class="peac-sort-btn" onclick="peacGridSortClick(&quot;'+key+'&quot;)" title="Cliquer pour trier"><span>'+escapeHtml(label)+'</span><span class="peac-sort-arrow">'+arrow+'</span></button></th>';}
     function renderPeacGrid(){
