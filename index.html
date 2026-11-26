@@ -232,6 +232,13 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
 .peac-year-select select{border:1px solid #cbd5e1;border-radius:6px;padding:7px;background:#fff;color:#334155;min-width:155px;font-size:.85rem}
 .peac-field-detail{border:0;background:transparent;padding:2px 0;color:#1d4f82;font:inherit;font-weight:700;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;cursor:pointer}
 .peac-field-detail:hover{color:#0f766e}
+.peac-teacher-detail{border:0;background:transparent;padding:2px 0;color:#1d4f82;font:inherit;font-weight:700;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;cursor:pointer;text-align:left}
+.peac-teacher-detail:hover{color:#0f766e}
+.peac-contact-card{display:grid;gap:14px;padding:8px 2px}
+.peac-contact-school{font-weight:700;color:#526273;padding-bottom:8px;border-bottom:1px solid #e2e8f0}
+.peac-contact-line{display:grid;grid-template-columns:115px 1fr;gap:12px;align-items:start}
+.peac-contact-line strong{color:#475569}
+.peac-contact-line a{color:#1d4f82;text-decoration:underline;overflow-wrap:anywhere}
 .peac-analysis-table th.peac-sortable .peac-sort-arrow{font-size:1.3rem;line-height:1;font-weight:900;margin-left:7px}
 .peac-grid-toolbar label{font-size:.72rem;font-weight:700;color:#64748b;display:flex;flex-direction:column;gap:4px}
 .peac-grid-toolbar input,.peac-grid-toolbar select{border:1px solid #cbd5e1;border-radius:6px;padding:7px;background:#fff;color:#334155;min-width:145px}
@@ -521,6 +528,7 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
     function syncPeacYearSelectors(){const source=document.getElementById('filter-annee');if(!source)return;['peac-grid-year','peac-analysis-year'].forEach(id=>{const target=document.getElementById(id);if(!target)return;const value=source.value;target.innerHTML=source.innerHTML;target.value=value;});}
     function changePeacYear(value){const source=document.getElementById('filter-annee');if(source&&[...source.options].some(o=>o.value===value)){source.value=value;syncPeacYearSelectors();updateDashboard();}}
     let peacGridCycle='EE',peacGridStatus='all';
+    let peacGridTeacherRows=[];
     function setPeacView(view){document.body.classList.toggle('peac-grid-active',view==='grid');document.body.classList.toggle('peac-analysis-active',view==='analysis');document.getElementById('peac-tab-summary').classList.toggle('active',view==='summary');document.getElementById('peac-tab-grid').classList.toggle('active',view==='grid');document.getElementById('peac-tab-analysis').classList.toggle('active',view==='analysis');if(view==='grid')renderPeacGrid();if(view==='analysis')renderPeacAnalysis();}
     function setPeacGridCycle(c){peacGridCycle=c;document.getElementById('peac-cycle-ee').classList.toggle('active',c==='EE');document.getElementById('peac-cycle-em').classList.toggle('active',c==='EM');renderPeacGrid();}
     function setPeacGridStatus(st){peacGridStatus=st;document.querySelectorAll('[data-grid-status]').forEach(b=>b.classList.toggle('active',b.dataset.gridStatus===st));renderPeacGrid();}
@@ -548,9 +556,10 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
       const count=rows.length,assigned=rows.filter(hasAssignedCode).length,hasWishes=rows.filter(r=>Object.keys(wishDataForRow(r)).length>0).length;
       const sum=document.getElementById('peac-grid-summary');if(sum)sum.textContent=count+' classe(s) affichée(s) · '+assigned+' parcours attribué(s) · '+(count-assigned)+' sans attribution · '+hasWishes+' classe(s) avec vœux';
       if(!count){wrap.innerHTML='<div class="peac-grid-empty">Aucune classe ne correspond aux filtres.</div>';return;}
+      peacGridTeacherRows=rows.slice();
       const fixedHeaders=['École','Enseignant / classe','Niveau','Effectif'];
       const top='<thead><tr><th colspan="4" class="fixed-col">Classe</th><th colspan="'+devices.length+'" class="eac-group">Dispositifs EAC hors parcours</th><th colspan="'+(codes.length+1)+'">Parcours EAC</th></tr><tr>'+fixedHeaders.map((h,i)=>peacGridHeader(h,['school','teacher','level','effectif'][i],'fixed-col fixed-'+(i+1))).join('')+devices.map(d=>peacGridHeader(d[1],'device:'+d[0],'eac-col-header')).join('')+peacGridHeader('Parcours attribué','assigned')+codes.map(code=>peacGridHeader(code+' — '+(names[code]||'Parcours '+code),'parcours:'+code)).join('')+'</tr></thead>';
-      const body='<tbody>'+rows.map(r=>{const wishes=wishDataForRow(r),noWish=!Object.keys(wishes).length,hasAssignment=hasAssignedCode(r),rowClass=noWish?'no-wish-row':(!hasAssignment?'wish-no-assignment-row':''),teacher=r.Enseignant||r.Classe||r.NomClasse||'—',fixed=[r.Ecole||'École non renseignée',teacher,extractValues(r.Niveau).join(', ')||'—',numericCost(r.EffectifsClasse).toLocaleString('fr-FR')];let tr='<tr class="'+rowClass+'">'+fixed.map((v,i)=>'<td class="fixed-col fixed-'+(i+1)+'">'+escapeHtml(v)+'</td>').join('');tr+=devices.map(d=>'<td class="eac-col" title="'+escapeHtml(d[1])+'">'+(peacGridDevice(r,d[0])?'✓':'—')+'</td>').join('');const assignedCode=hasAssignedCode(r)?String(r.CodeParcours).trim():'';tr+='<td class="'+(assignedCode?'assigned-cell':'empty-cell')+'">'+(assignedCode?escapeHtml(assignedCode):'—')+'</td>';tr+=codes.map(code=>{if(code===assignedCode)return '<td class="assigned-cell" title="Parcours attribué">ATTRIBUÉ</td>';const rank=wishes[code];return rank?'<td class="wish-cell wish-'+Math.min(Number(rank),5)+'" title="Vœu '+rank+'">V'+rank+'</td>':'<td class="empty-cell">·</td>';}).join('');return tr+'</tr>';}).join('')+'</tbody>';
+      const body='<tbody>'+rows.map(r=>{const wishes=wishDataForRow(r),noWish=!Object.keys(wishes).length,hasAssignment=hasAssignedCode(r),rowClass=noWish?'no-wish-row':(!hasAssignment?'wish-no-assignment-row':''),teacher=r.Enseignant||r.Classe||r.NomClasse||'—',fixed=[r.Ecole||'École non renseignée',teacher,extractValues(r.Niveau).join(', ')||'—',numericCost(r.EffectifsClasse).toLocaleString('fr-FR')];let tr='<tr class="'+rowClass+'">'+fixed.map((v,i)=>'<td class="fixed-col fixed-'+(i+1)+'">'+(i===1?'<button type="button" class="peac-teacher-detail" onclick="showTeacherContact('+rows.indexOf(r)+')" title="Afficher les coordonnées de cet enseignant">'+escapeHtml(v)+'</button>':escapeHtml(v))+'</td>').join('');tr+=devices.map(d=>'<td class="eac-col" title="'+escapeHtml(d[1])+'">'+(peacGridDevice(r,d[0])?'✓':'—')+'</td>').join('');const assignedCode=hasAssignedCode(r)?String(r.CodeParcours).trim():'';tr+='<td class="'+(assignedCode?'assigned-cell':'empty-cell')+'">'+(assignedCode?escapeHtml(assignedCode):'—')+'</td>';tr+=codes.map(code=>{if(code===assignedCode)return '<td class="assigned-cell" title="Parcours attribué">ATTRIBUÉ</td>';const rank=wishes[code];return rank?'<td class="wish-cell wish-'+Math.min(Number(rank),5)+'" title="Vœu '+rank+'">V'+rank+'</td>':'<td class="empty-cell">·</td>';}).join('');return tr+'</tr>';}).join('')+'</tbody>';
       wrap.innerHTML='<table class="peac-matrix peac-matrix">'+top+body+'</table>';
     }
     function updateDashboard() {
@@ -743,6 +752,23 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
         '</tbody></table></div>'+
         '<p class="peac-analysis-note"><strong>Lecture des indicateurs :</strong> les parcours possibles sont les codes distincts du catalogue Table_parcours. Les classes potentiellement bénéficiaires sont estimées par la somme des NbMax des parcours du champ culturel dans Table_parcours. TypeParcours sert uniquement à rattacher un parcours à son champ culturel. Les vœux sont comptés par classe et par parcours demandé ; une même classe peut donc compter plusieurs fois dans le nombre de vœux, mais une seule fois dans le nombre de classes ayant fait un vœu. Les attributions proviennent de CodeParcours dans Table_ecoles. Le tableau des partenaires s’appuie sur le champ Partenaire de Table_voeux associé au CodeParcours.</p>';
       enablePeacAnalysisSorting(host);
+    }
+
+    function showTeacherContact(index){
+      const r=peacGridTeacherRows[index];if(!r)return;
+      const teacher=String(r.Enseignant||r.NomEnseignant||r.Professeur||r.Classe||r.NomClasse||'').trim();
+      const school=normalizeKey(r.Ecole||r.École);
+      const matches=(voeuxRecords||[]).filter(v=>{
+        const vt=normalizeKey(v.Enseignant||v.NomEnseignant||v.Professeur||v.Classe||v.NomClasse||v.Nom||v.NomAgent||v.NomComplet);
+        const vs=normalizeKey(v.Ecole||v.École||v.Structure||v.Etablissement||v.EtablissementScolaire);
+        return teacher&&vt===normalizeKey(teacher)&&(!vs||!school||vs===school);
+      });
+      const collect=key=>[...new Set(matches.map(v=>String(v[key]??'').trim()).filter(Boolean))];
+      const mails=collect('Mail'),phones=collect('Telephone');
+      const contactLine=(label,values,type)=>'<div class="peac-contact-line"><strong>'+label+'</strong><div>'+ (values.length?values.map(v=>type==='mail'?'<a href="mailto:'+escapeHtml(v)+'">'+escapeHtml(v)+'</a>':type==='phone'?'<a href="tel:'+escapeHtml(v)+'">'+escapeHtml(v)+'</a>':escapeHtml(v)).join('<br>'):'Non renseigné')+'</div></div>';
+      document.getElementById('detail-title').textContent=teacher+' — Coordonnées';
+      document.getElementById('detail-content').innerHTML='<div class="peac-contact-card"><div class="peac-contact-school">'+escapeHtml(r.Ecole||'École non renseignée')+'</div>'+contactLine('Mail',mails,'mail')+contactLine('Téléphone',phones,'phone')+'</div>'+(matches.length>1?'<p class="peac-analysis-note">Coordonnées regroupées à partir de '+matches.length+' ligne(s) correspondante(s) dans Table_voeux.</p>':'');
+      document.getElementById('detail-modal').classList.add('open');
     }
 
     function showFieldPathways(field){
