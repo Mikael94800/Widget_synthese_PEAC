@@ -201,12 +201,57 @@
       background: #E2E8F0;
       color: #2D3748;
     }
-  </style>
+  
+/* Vue matricielle PEAC, autonome et consultative */
+.peac-view-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.peac-view-tabs button{border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#334155;padding:9px 13px;font-weight:700;cursor:pointer}
+.peac-view-tabs button.active{background:#1a365d;color:#fff;border-color:#1a365d}
+#peac-grid-view{display:none;border:1px solid var(--border);background:#fff;border-radius:10px;padding:12px;margin:12px 0}
+body.peac-grid-active #summary-view{display:none!important}
+body.peac-grid-active #peac-grid-view{display:block!important}
+.peac-grid-toolbar{display:flex;align-items:end;gap:9px;flex-wrap:wrap;margin:10px 0}
+.peac-grid-toolbar label{font-size:.72rem;font-weight:700;color:#64748b;display:flex;flex-direction:column;gap:4px}
+.peac-grid-toolbar input,.peac-grid-toolbar select{border:1px solid #cbd5e1;border-radius:6px;padding:7px;background:#fff;color:#334155;min-width:145px}
+.peac-grid-cycle,.peac-grid-status{display:flex;gap:5px;flex-wrap:wrap}
+.peac-grid-cycle button,.peac-grid-status button{border:1px solid #cbd5e1;background:#f8fafc;color:#334155;border-radius:6px;padding:7px 10px;cursor:pointer;font-size:.8rem}
+.peac-grid-cycle button.active,.peac-grid-status button.active{background:#1a365d;color:white;border-color:#1a365d}
+.peac-grid-summary{font-size:.78rem;color:#64748b;margin:8px 0}
+.peac-grid-scroll{overflow:auto;max-height:72vh;border:1px solid #cbd5e1;border-radius:7px}
+.peac-matrix{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;font-size:.73rem}
+.peac-matrix th,.peac-matrix td{padding:5px 7px;border-right:1px solid #dbe3ec;border-bottom:1px solid #dbe3ec;text-align:center;min-width:48px;max-width:145px;vertical-align:middle;white-space:normal}
+.peac-matrix thead tr:first-child th{position:sticky;top:0;z-index:5;background:#24476b;color:white;height:30px}
+.peac-matrix thead tr:nth-child(2) th{position:sticky;top:30px;z-index:5;background:#315a7e;color:white;min-width:88px;max-width:125px;height:62px;line-height:1.2}
+.peac-matrix thead th.fixed-col{z-index:9;background:#24476b;min-width:90px;max-width:150px}
+.peac-matrix .fixed-col{position:sticky;left:0;background:#f1f5f9;color:#334155;text-align:left;z-index:3}
+.peac-matrix .fixed-1{left:0;min-width:145px;max-width:145px}
+.peac-matrix .fixed-2{left:145px;min-width:140px;max-width:140px}
+.peac-matrix .fixed-3{left:285px;min-width:75px;max-width:75px}
+.peac-matrix .fixed-4{left:360px;min-width:58px;max-width:58px;text-align:right}
+.peac-matrix .fixed-5{left:418px;min-width:72px;max-width:72px}
+.peac-matrix tbody td.fixed-col{z-index:2}
+.peac-matrix tbody tr:hover td{filter:brightness(.97)}
+.peac-matrix .no-wish-row td.fixed-col{background:#fff2cc}
+.peac-matrix .wish-cell{font-weight:700;min-width:42px;width:42px}
+.peac-matrix .wish-1{background:#5b9bd5;color:#fff}
+.peac-matrix .wish-2{background:#ffe699;color:#594300}
+.peac-matrix .wish-3{background:#c9b2e8;color:#49305e}
+.peac-matrix .wish-4{background:#f4b183;color:#673d1d}
+.peac-matrix .wish-5{background:#a9d18e;color:#284c18}
+.peac-matrix .assigned-cell{background:#111;color:#fff;font-weight:800;min-width:75px}
+.peac-matrix .eac-group{background:#506a54!important;border-left:3px solid #fff!important}
+.peac-matrix .eac-col{min-width:62px;max-width:76px;background:#f7faf7;color:#166534;font-size:1rem;font-weight:800}
+.peac-matrix .eac-col-header{background:#3d6545!important;min-width:76px!important;max-width:92px!important}
+.peac-matrix .empty-cell{color:#cbd5e1}
+.peac-grid-empty{padding:22px;text-align:center;color:#64748b}
+@media(max-width:700px){.peac-matrix .fixed-1{min-width:115px;max-width:115px}.peac-matrix .fixed-2{left:115px;min-width:115px;max-width:115px}.peac-matrix .fixed-3{left:230px;min-width:65px;max-width:65px}.peac-matrix .fixed-4{left:295px;min-width:48px;max-width:48px}.peac-matrix .fixed-5{left:343px;min-width:58px;max-width:58px}}
+</style>
 </head>
 <body>
 
   <h2>📊 Synthèse PEAC, Dispositifs & Budget — V9</h2>
 
+  <div class="peac-view-tabs"><button id="peac-tab-summary" class="active" type="button" onclick="setPeacView('summary')">Synthèse</button><button id="peac-tab-grid" type="button" onclick="setPeacView('grid')">Grille des attributions</button></div>
+  <div id="summary-view">
   <!-- FILTRES CROISÉS -->
   <div class="filters-bar">
     <div class="filter-group">
@@ -302,6 +347,19 @@
     </div>
   </div>
 
+  </div>
+  <section id="peac-grid-view" aria-label="Grille des attributions PEAC">
+    <h2>Grille des attributions PEAC</h2>
+    <div class="peac-grid-toolbar">
+      <div class="peac-grid-cycle"><button id="peac-cycle-ee" class="active" type="button" onclick="setPeacGridCycle('EE')">Élémentaire</button><button id="peac-cycle-em" type="button" onclick="setPeacGridCycle('EM')">Maternelle</button></div>
+      <label>Recherche<input id="peac-grid-search" type="search" placeholder="École, classe, enseignant, code…" oninput="renderPeacGrid()"></label>
+      <label>Tri<select id="peac-grid-sort" onchange="renderPeacGrid()"><option value="school">École A–Z</option><option value="teacher">Enseignant A–Z</option><option value="level">Niveau</option><option value="effectif">Effectif croissant</option><option value="effectif-desc">Effectif décroissant</option></select></label>
+      <div class="peac-grid-status"><button type="button" class="active" data-grid-status="all" onclick="setPeacGridStatus('all')">Toutes</button><button type="button" data-grid-status="assigned" onclick="setPeacGridStatus('assigned')">Attribuées</button><button type="button" data-grid-status="unassigned" onclick="setPeacGridStatus('unassigned')">Sans attribution</button><button type="button" data-grid-status="wishes" onclick="setPeacGridStatus('wishes')">Avec vœux</button></div>
+    </div>
+    <div id="peac-grid-summary" class="peac-grid-summary"></div>
+    <div class="peac-grid-scroll" id="peac-grid-table-wrap"><div class="peac-grid-empty">Les données se chargeront à l'ouverture du widget.</div></div>
+    <div class="status-note">Lecture seule : tris et filtres de cette grille ne modifient pas les données Grist.</div>
+  </section>
   <script>
     let ecolesRecords = [];
     let voeuxMap = {};
@@ -421,6 +479,35 @@
       updateDashboard();
     }
 
+
+    let peacGridCycle='EE',peacGridStatus='all';
+    function setPeacView(view){document.body.classList.toggle('peac-grid-active',view==='grid');document.getElementById('peac-tab-summary').classList.toggle('active',view==='summary');document.getElementById('peac-tab-grid').classList.toggle('active',view==='grid');if(view==='grid')renderPeacGrid();}
+    function setPeacGridCycle(c){peacGridCycle=c;document.getElementById('peac-cycle-ee').classList.toggle('active',c==='EE');document.getElementById('peac-cycle-em').classList.toggle('active',c==='EM');renderPeacGrid();}
+    function setPeacGridStatus(st){peacGridStatus=st;document.querySelectorAll('[data-grid-status]').forEach(b=>b.classList.toggle('active',b.dataset.gridStatus===st));renderPeacGrid();}
+    function peacGridDevice(r,key){return dispositif(r,key);}
+    function renderPeacGrid(){
+      const wrap=document.getElementById('peac-grid-table-wrap');if(!wrap||!Array.isArray(ecolesRecords))return;
+      const year=document.getElementById('filter-annee')?.value||'',school=document.getElementById('filter-ecole')?.value||'ALL',query=(document.getElementById('peac-grid-search')?.value||'').trim().toLocaleLowerCase('fr'),sort=document.getElementById('peac-grid-sort')?.value||'school';
+      const levels=selectedValues('niveau'),disc=selectedValues('discipline');
+      const isCycle=r=>peacGridCycle==='EE'?/élémentaire|elementaire|^ee$/i.test(String(r.Cycle||'')):/maternelle|^em$/i.test(String(r.Cycle||''));
+      let rows=ecolesRecords.filter(r=>String(r.AnneeScolaire||'').trim()===year&&isCycle(r)&&(school==='ALL'||String(r.Ecole||'').trim()===school));
+      if(levels.length)rows=rows.filter(r=>extractValues(r.Niveau).some(n=>levels.includes(n)));
+      if(disc.length)rows=rows.filter(r=>getDisciplines(r).some(d=>disc.includes(d)));
+      rows=rows.filter(r=>{const assigned=hasAssignedCode(r),hasWish=Object.keys(wishDataForRow(r)).length>0;if(peacGridStatus==='assigned'&&!assigned)return false;if(peacGridStatus==='unassigned'&&assigned)return false;if(peacGridStatus==='wishes'&&!hasWish)return false;const text=[r.Ecole,r.Enseignant,r.Classe,r.NomClasse,r.Niveau,r.CodeParcours,r.NomParcours].map(v=>String(v??'')).join(' ').toLocaleLowerCase('fr')+' '+Object.keys(wishDataForRow(r)).join(' ');return !query||text.includes(query);});
+      rows.sort((a,b)=>{if(sort==='teacher')return String(a.Enseignant||a.Classe||a.NomClasse||'').localeCompare(String(b.Enseignant||b.Classe||b.NomClasse||''),'fr');if(sort==='level')return String(a.Niveau||'').localeCompare(String(b.Niveau||''),'fr',{numeric:true});if(sort==='effectif')return numericCost(a.EffectifsClasse)-numericCost(b.EffectifsClasse);if(sort==='effectif-desc')return numericCost(b.EffectifsClasse)-numericCost(a.EffectifsClasse);return String(a.Ecole||'').localeCompare(String(b.Ecole||''),'fr')||String(a.Enseignant||a.Classe||a.NomClasse||'').localeCompare(String(b.Enseignant||b.Classe||b.NomClasse||''),'fr');});
+      const codeSet=new Set();rows.forEach(r=>{Object.keys(wishDataForRow(r)).forEach(code=>codeSet.add(code));if(hasAssignedCode(r))codeSet.add(String(r.CodeParcours).trim());});
+      const codes=[...codeSet].sort((a,b)=>a.localeCompare(b,'fr',{numeric:true})),names={};
+      ecolesRecords.forEach(r=>{const code=String(r.CodeParcours||'').trim(),name=String(r.NomParcours||'').trim();if(code&&name&&!names[code])names[code]=name;});
+      (voeuxRecords||[]).concat(parcoursRecords||[]).forEach(v=>{const code=String(v.CodeParcours??v.Code??v.Code_parcours??'').trim(),name=String(v.NomParcours??v.Parcours??v.LibelleParcours??v.Nom??'').trim();if(code&&name&&!names[code])names[code]=name;});
+      const devices=[['PasseportMusique','Passeport Musique'],['Ecole_Cinema','École & Cinéma'],['Chorale_CRR93','Chorale CRR93'],['Sensibilisation_CHAM_CHAT','CHAM / CHAT']];
+      const count=rows.length,assigned=rows.filter(hasAssignedCode).length,hasWishes=rows.filter(r=>Object.keys(wishDataForRow(r)).length>0).length;
+      const sum=document.getElementById('peac-grid-summary');if(sum)sum.textContent=count+' classe(s) affichée(s) · '+assigned+' parcours attribué(s) · '+(count-assigned)+' sans attribution · '+hasWishes+' classe(s) avec vœux';
+      if(!count){wrap.innerHTML='<div class="peac-grid-empty">Aucune classe ne correspond aux filtres.</div>';return;}
+      const fixedHeaders=['École','Enseignant / classe','Niveau','Effectif'];
+      const top='<thead><tr><th colspan="4" class="fixed-col">Classe</th><th colspan="'+devices.length+'" class="eac-group">Dispositifs EAC hors parcours</th><th colspan="'+(codes.length+1)+'">Parcours EAC</th></tr><tr>'+fixedHeaders.map((h,i)=>'<th class="fixed-col fixed-'+(i+1)+'">'+escapeHtml(h)+'</th>').join('')+devices.map(d=>'<th class="eac-col-header">'+escapeHtml(d[1])+'</th>').join('')+'<th>Parcours attribué</th>'+codes.map(code=>'<th>'+escapeHtml(code+' — '+(names[code]||'Parcours '+code))+'</th>').join('')+'</tr></thead>';
+      const body='<tbody>'+rows.map(r=>{const wishes=wishDataForRow(r),noWish=!Object.keys(wishes).length,teacher=r.Enseignant||r.Classe||r.NomClasse||'—',fixed=[r.Ecole||'École non renseignée',teacher,extractValues(r.Niveau).join(', ')||'—',numericCost(r.EffectifsClasse).toLocaleString('fr-FR')];let tr='<tr class="'+(noWish?'no-wish-row':'')+'">'+fixed.map((v,i)=>'<td class="fixed-col fixed-'+(i+1)+'">'+escapeHtml(v)+'</td>').join('');tr+=devices.map(d=>'<td class="eac-col" title="'+escapeHtml(d[1])+'">'+(peacGridDevice(r,d[0])?'✓':'—')+'</td>').join('');const assignedCode=hasAssignedCode(r)?String(r.CodeParcours).trim():'';tr+='<td class="'+(assignedCode?'assigned-cell':'empty-cell')+'">'+(assignedCode?escapeHtml(assignedCode):'—')+'</td>';tr+=codes.map(code=>{if(code===assignedCode)return '<td class="assigned-cell" title="Parcours attribué">ATTRIBUÉ</td>';const rank=wishes[code];return rank?'<td class="wish-cell wish-'+Math.min(Number(rank),5)+'" title="Vœu '+rank+'">V'+rank+'</td>':'<td class="empty-cell">·</td>';}).join('');return tr+'</tr>';}).join('')+'</tbody>';
+      wrap.innerHTML='<table class="peac-matrix peac-matrix">'+top+body+'</table>';
+    }
     function updateDashboard() {
       const selAnnee = document.getElementById('filter-annee').value;
       const selEcole = document.getElementById('filter-ecole').value;
@@ -530,6 +617,7 @@
         tr.innerHTML=`<td><strong>${escapeHtml(d.key)}</strong></td><td><span class="badge">${d.classes}</span></td><td>${d.eleves}</td><td>${d.eac} cl.</td><td><strong>${d.budget.toLocaleString('fr-FR')} €</strong></td><td>${d.mus} cl.</td><td>${d.cin} cl.</td><td>${d.cho} cl.</td><td>${d.cham} cl.</td><td><button class="detail-btn" type="button">Voir les parcours</button></td>`;
         tr.querySelector('button').addEventListener('click',()=>showDetail(d)); tbody.appendChild(tr);
       });
+      renderPeacGrid();
     }
 
     function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
