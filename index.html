@@ -239,7 +239,7 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
 .peac-contact-line{display:grid;grid-template-columns:115px 1fr;gap:12px;align-items:start}
 .peac-contact-line strong{color:#475569}
 .peac-contact-line a{color:#1d4f82;text-decoration:underline;overflow-wrap:anywhere}
-.peac-contact-devices{border-top:1px solid #e2e8f0;padding-top:12px;color:#334155}.peac-contact-devices strong{color:#1a365d}.peac-contact-devices ul{margin:7px 0 0;padding-left:22px;display:grid;gap:5px}.peac-contact-devices li{line-height:1.35}
+.peac-contact-extra{border-top:1px solid #e2e8f0;padding-top:12px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;color:#334155}.peac-contact-devices strong,.peac-contact-partner strong{color:#1a365d}.peac-contact-devices ul{margin:7px 0 0;padding-left:22px;display:grid;gap:5px}.peac-contact-devices li{line-height:1.35}.peac-contact-partner div{margin-top:7px;line-height:1.45}@media(max-width:520px){.peac-contact-extra{grid-template-columns:1fr;gap:12px}}
 .peac-analysis-table th.peac-sortable .peac-sort-arrow{font-size:1.3rem;line-height:1;font-weight:900;margin-left:7px}
 .peac-grid-toolbar label{font-size:.72rem;font-weight:700;color:#64748b;display:flex;flex-direction:column;gap:4px}
 .peac-grid-toolbar input,.peac-grid-toolbar select{border:1px solid #cbd5e1;border-radius:6px;padding:7px;background:#fff;color:#334155;min-width:145px}
@@ -840,8 +840,9 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
       if(dispositif(r,'PasseportMusique'))devices.push('Passeport musique');
       if(dispositif(r,'Ecole_Cinema'))devices.push('École et cinéma');
       if(dispositif(r,'Chorale_CRR93'))devices.push('Chorale');
-      if(dispositif(r,'Sensibilisation_CHAM_CHAT'))devices.push('Sensibilisation');
-      const deviceHtml=devices.length?'<div class="peac-contact-devices"><strong>Dispositifs dont bénéficie la classe</strong><ul>'+devices.filter(Boolean).map(v=>'<li>'+escapeHtml(v)+'</li>').join('')+'</ul></div>':'';
+      if(dispositif(r,'Sensibilisation_CHAM_CHAT'))devices.push('Sensibilisation CHAM / CHAT');
+      const partnerNames=hasAssignedCode(r)?partnersForCodeYear(r.CodeParcours,r.AnneeScolaire):[];
+      const deviceHtml=(devices.length||partnerNames.length)?'<div class="peac-contact-extra"><div class="peac-contact-devices">'+(devices.length?'<strong>Dispositifs dont bénéficie la classe</strong><ul>'+devices.filter(Boolean).map(v=>'<li>'+escapeHtml(v)+'</li>').join('')+'</ul>':'')+'</div>'+(partnerNames.length?'<div class="peac-contact-partner"><strong>Partenaire culturel</strong><div>'+partnerNames.map(v=>escapeHtml(v)).join('<br>')+'</div></div>':'')+'</div>':'';
       document.getElementById('detail-title').textContent=teacher+' — Coordonnées';
       document.getElementById('detail-content').innerHTML='<div class="peac-contact-card"><div class="peac-contact-school">'+escapeHtml(r.Ecole||'École non renseignée')+'</div>'+contactLine('Mail',mails,'mail')+contactLine('Téléphone',phones,'phone')+deviceHtml+'</div>'+(matches.length>1?'<p class="peac-analysis-note">Coordonnées regroupées à partir de '+matches.length+' ligne(s) correspondante(s) dans Table_voeux.</p>':'');
       document.getElementById('detail-modal').classList.add('open');
