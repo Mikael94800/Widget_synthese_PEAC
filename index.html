@@ -824,11 +824,11 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
       return (voeuxRecords||[]).filter(v=>{
         if(teacherIdentity(v)!==identity)return false;
         const vs=normalizeKey(v.Ecole),vy=String(v.AnneeScolaire??'').trim();
-        return (!school||!vs||school===vs)&&(!year||!vy||year===vy);
+        return school===vs&&year===vy;
       });
     }
     function parseWishCell(raw){
-      const match=String(raw??'').trim().match(/^(\\d+)/);
+      const match=String(raw??'').trim().match(/^(\d+)/);
       return match?match[1]:null;
     }
     function wishDataForRow(r){
