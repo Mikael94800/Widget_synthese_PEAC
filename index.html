@@ -265,7 +265,7 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
 .peac-grid-column-options label{display:flex;align-items:flex-start;gap:6px;font-weight:400;color:#334155}
 #summary-table-body tr.summary-row-clickable{cursor:pointer}
 #summary-table-body tr.summary-row-clickable:hover{background:#eef5fb}
-.peac-detail-pathway{cursor:pointer;color:#1d4f82;text-decoration:underline;text-decoration-style:dotted;font-weight:700}
+.peac-detail-pathway{border:0;background:transparent;padding:0;cursor:pointer;color:#1d4f82;font:inherit;font-weight:700;text-decoration:none;text-align:left}
 .peac-detail-pathway:hover{color:#0f766e}
 .peac-matrix tbody td.fixed-col{z-index:2}
 .peac-matrix tbody tr:hover td{filter:brightness(.97)}
@@ -756,18 +756,25 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
       const ensure=field=>{if(!stats.has(field))stats.set(field,{possible:new Set(),capacity:0,wishClasses:new Set(),wishes:0,assigned:new Set(),assignedEE:new Set(),assignedEM:new Set()});return stats.get(field);};
       pathways.forEach(p=>p.disciplines.forEach(d=>{const st=ensure(d);st.possible.add(p.code);st.capacity+=p.nbMax;}));
       const wishRows=(voeuxRecords||[]).filter(v=>String(v.AnneeScolaire??'').trim()===year);
+      // Comptage global directement dans Table_voeux : chaque ligne de l'année compte
+      // dès qu'au moins un des six champs de vœu est renseigné, sans dépendre d'une attribution
+      // ni de la reconnaissance du code dans le catalogue des parcours.
       const wishClassKeys=new Set();
       let totalWishes=0;
       wishRows.forEach((v,index)=>{
+        const classKey=String(v.id??(normalizeKey(v.NomEnseignant)+'|'+normalizeKey(v.PrenomEnseignant)+'|'+normalizeKey(v.Ecole)+'|'+index));
         let hasAny=false;
         for(let rank=1;rank<=6;rank++){
-          const code=parseWishCell(v['Voeu'+rank]);if(!code)continue;
-          hasAny=true;totalWishes++;
+          const rawWish=v['Voeu'+rank];
+          if(rawWish!==null&&rawWish!==undefined&&String(rawWish).trim()!==''){
+            hasAny=true;
+            totalWishes++;
+          }
+          const code=parseWishCell(rawWish);if(!code)continue;
           const p=pathways.get(code);if(!p)continue;
-          const classKey=String(v.id??(normalizeKey(v.NomEnseignant)+'|'+normalizeKey(v.PrenomEnseignant)+'|'+normalizeKey(v.Ecole)+'|'+index));
           p.disciplines.forEach(field=>{const st=ensure(field);st.wishClasses.add(classKey);st.wishes++;});
         }
-        if(hasAny)wishClassKeys.add(String(v.id??(normalizeKey(v.NomEnseignant)+'|'+normalizeKey(v.PrenomEnseignant)+'|'+normalizeKey(v.Ecole)+'|'+index)));
+        if(hasAny)wishClassKeys.add(classKey);
       });
       rows.forEach((r,index)=>{
         if(!hasAssignedCode(r))return;
