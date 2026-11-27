@@ -251,12 +251,22 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
 .peac-matrix th,.peac-matrix td{padding:5px 7px;border-right:1px solid #dbe3ec;border-bottom:1px solid #dbe3ec;text-align:center;min-width:48px;max-width:145px;vertical-align:middle;white-space:normal}
 .peac-matrix thead tr:first-child th{position:sticky;top:0;z-index:5;background:#24476b;color:white;height:30px}
 .peac-matrix thead tr:nth-child(2) th{position:sticky;top:30px;z-index:5;background:#315a7e;color:white;min-width:88px;max-width:125px;height:62px;line-height:1.2}
-.peac-matrix thead th.fixed-col{z-index:9;background:#24476b;min-width:90px;max-width:150px}
+.peac-matrix thead th.fixed-col{position:sticky;z-index:9;background:#24476b;min-width:90px;max-width:150px}
 .peac-matrix .fixed-col{position:sticky;left:0;background:#f1f5f9;color:#334155;text-align:left;z-index:3}
 .peac-matrix .fixed-1{left:0;min-width:145px;max-width:145px}
 .peac-matrix .fixed-2{left:145px;min-width:140px;max-width:140px}
-.peac-matrix .fixed-3{left:285px;min-width:75px;max-width:75px}
-.peac-matrix .fixed-4{left:360px;min-width:58px;max-width:58px;text-align:right}
+.peac-matrix .grid-col-3{min-width:75px;max-width:75px}
+.peac-matrix .grid-col-4{min-width:58px;max-width:58px;text-align:right}
+.peac-matrix th .peac-sort-btn span:first-child{min-width:0;overflow-wrap:anywhere;word-break:break-word;white-space:normal}
+.peac-grid-column-controls{margin:8px 0 10px}
+.peac-grid-column-controls details{display:inline-block;border:1px solid #cbd5e1;border-radius:7px;padding:6px 10px;background:#f8fafc;font-size:.8rem}
+.peac-grid-column-controls summary{cursor:pointer;font-weight:700;color:#334155}
+.peac-grid-column-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:5px 12px;max-height:230px;overflow:auto;min-width:280px;padding:9px 2px 2px}
+.peac-grid-column-options label{display:flex;align-items:flex-start;gap:6px;font-weight:400;color:#334155}
+.summary-table tbody tr.summary-row-clickable{cursor:pointer}
+.summary-table tbody tr.summary-row-clickable:hover{background:#eef5fb}
+.peac-detail-pathway{cursor:pointer;color:#1d4f82;text-decoration:underline;text-decoration-style:dotted;font-weight:700}
+.peac-detail-pathway:hover{color:#0f766e}
 .peac-matrix .fixed-5{left:418px;min-width:72px;max-width:72px}
 .peac-matrix tbody td.fixed-col{z-index:2}
 .peac-matrix tbody tr:hover td{filter:brightness(.97)}
@@ -274,7 +284,7 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
 .peac-matrix .eac-col-header{background:#3d6545!important;min-width:76px!important;max-width:92px!important}
 .peac-matrix .empty-cell{color:#cbd5e1}
 .peac-grid-empty{padding:22px;text-align:center;color:#64748b}
-@media(max-width:700px){.peac-matrix .fixed-1{min-width:115px;max-width:115px}.peac-matrix .fixed-2{left:115px;min-width:115px;max-width:115px}.peac-matrix .fixed-3{left:230px;min-width:65px;max-width:65px}.peac-matrix .fixed-4{left:295px;min-width:48px;max-width:48px}.peac-matrix .fixed-5{left:343px;min-width:58px;max-width:58px}}
+@media(max-width:700px){.peac-matrix .fixed-1{min-width:115px;max-width:115px}.peac-matrix .fixed-2{left:115px;min-width:115px;max-width:115px}.peac-matrix .grid-col-3{min-width:65px;max-width:65px}.peac-matrix .grid-col-4{min-width:48px;max-width:48px}}
 
 .peac-matrix th .peac-sort-btn{display:flex;width:100%;height:100%;align-items:center;justify-content:center;gap:5px;border:0;background:transparent;color:inherit;font:inherit;font-weight:700;cursor:pointer;padding:2px;line-height:1.15;text-align:center}
 .peac-matrix th.fixed-col .peac-sort-btn{justify-content:flex-start;text-align:left}
@@ -394,6 +404,7 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
       <div class="peac-grid-status"><button type="button" class="active" data-grid-status="all" onclick="setPeacGridStatus('all')">Toutes</button><button type="button" data-grid-status="assigned" onclick="setPeacGridStatus('assigned')">Attribuées</button><button type="button" data-grid-status="unassigned" onclick="setPeacGridStatus('unassigned')">Sans attribution</button><button type="button" data-grid-status="wishes" onclick="setPeacGridStatus('wishes')">Avec vœux</button></div>
     </div>
     <div id="peac-grid-summary" class="peac-grid-summary"></div>
+    <div id="peac-grid-column-controls" class="peac-grid-column-controls"></div>
     <div class="peac-grid-scroll" id="peac-grid-table-wrap"><div class="peac-grid-empty">Les données se chargeront à l'ouverture du widget.</div></div>
     <div class="status-note">Lecture seule : tris et filtres de cette grille ne modifient pas les données Grist.</div>
   </section>
@@ -534,8 +545,16 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
     function setPeacGridStatus(st){peacGridStatus=st;document.querySelectorAll('[data-grid-status]').forEach(b=>b.classList.toggle('active',b.dataset.gridStatus===st));renderPeacGrid();}
     function peacGridDevice(r,key){return dispositif(r,key);}
     let peacGridHeaderSort=null;
+    const peacGridHiddenColumns=new Set();
+    function renderGridColumnControls(codes,devices){
+      const host=document.getElementById('peac-grid-column-controls');if(!host)return;
+      const options=[{key:'assigned',label:'Parcours attribué'},...codes.map(code=>({key:'wish:'+code,label:code+' — '+pathwayNameForCode(code,document.getElementById('filter-annee')?.value)})),...devices.map(d=>({key:'device:'+d[0],label:d[1]}))];
+      host.innerHTML='<details><summary>Masquer / afficher des colonnes</summary><div class="peac-grid-column-options">'+options.map(o=>'<label><input type="checkbox" data-grid-column="'+escapeHtml(o.key)+'" '+(peacGridHiddenColumns.has(o.key)?'':'checked')+'> '+escapeHtml(o.label)+'</label>').join('')+'</div></details>';
+      host.querySelectorAll('[data-grid-column]').forEach(cb=>cb.addEventListener('change',()=>{const key=cb.dataset.gridColumn;if(cb.checked)peacGridHiddenColumns.delete(key);else peacGridHiddenColumns.add(key);applyGridColumnVisibility();}));
+    }
+    function applyGridColumnVisibility(){document.querySelectorAll('#peac-grid-table-wrap [data-col-key]').forEach(cell=>{cell.style.display=peacGridHiddenColumns.has(cell.dataset.colKey)?'none':'';});}
     function peacGridSortClick(key){if(peacGridHeaderSort&&peacGridHeaderSort.key===key)peacGridHeaderSort.dir=peacGridHeaderSort.dir==='asc'?'desc':'asc';else peacGridHeaderSort={key,dir:'asc'};renderPeacGrid();}
-    function peacGridHeader(label,key,classes=''){const active=peacGridHeaderSort&&peacGridHeaderSort.key===key,dir=active?peacGridHeaderSort.dir:null,arrow=dir==='asc'?'▲':dir==='desc'?'▼':'↕';return '<th class="'+classes+(active?' sort-active':'')+'"><button type="button" class="peac-sort-btn" onclick="peacGridSortClick(&quot;'+key+'&quot;)" title="Cliquer pour trier"><span>'+escapeHtml(label)+'</span><span class="peac-sort-arrow">'+arrow+'</span></button></th>';}
+    function peacGridHeader(label,key,classes=''){const active=peacGridHeaderSort&&peacGridHeaderSort.key===key,dir=active?peacGridHeaderSort.dir:null,arrow=dir==='asc'?'▲':dir==='desc'?'▼':'↕',colKey=key==='assigned'?'assigned':key.startsWith('parcours:')?'wish:'+key.slice(9):key.startsWith('device:')?'device:'+key.slice(7):'';return '<th class="'+classes+(active?' sort-active':'')+'"'+(colKey?' data-col-key="'+escapeHtml(colKey)+'"':'')+'><button type="button" class="peac-sort-btn" onclick="peacGridSortClick(&quot;'+key+'&quot;)" title="'+escapeHtml(label)+'"><span>'+escapeHtml(label)+'</span><span class="peac-sort-arrow">'+arrow+'</span></button></th>';}
     function renderPeacGrid(){
       const wrap=document.getElementById('peac-grid-table-wrap');if(!wrap||!Array.isArray(ecolesRecords))return;
       const year=document.getElementById('filter-annee')?.value||'',school=document.getElementById('filter-ecole')?.value||'ALL',query=(document.getElementById('peac-grid-search')?.value||'').trim().toLocaleLowerCase('fr'),sort=document.getElementById('peac-grid-sort')?.value||'school';
@@ -549,18 +568,36 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
       const compareText=(a,b)=>String(a??'').localeCompare(String(b??''),'fr',{numeric:true,sensitivity:'base'});
       if(peacGridHeaderSort){const {key,dir}=peacGridHeaderSort,sign=dir==='asc'?1:-1;rows.sort((a,b)=>{let va,vb;if(key==='school'){va=a.Ecole;vb=b.Ecole;}else if(key==='teacher'){va=teacherDisplay(a);vb=teacherDisplay(b);}else if(key==='level'){va=extractValues(a.Niveau).join(',');vb=extractValues(b.Niveau).join(',');}else if(key==='effectif'){va=numericCost(a.EffectifsClasse);vb=numericCost(b.EffectifsClasse);return (va-vb)*sign;}else if(key==='assigned'){va=String(a.CodeParcours||'');vb=String(b.CodeParcours||'');}else if(key.startsWith('device:')){const k=key.slice(7);va=peacGridDevice(a,k)?1:0;vb=peacGridDevice(b,k)?1:0;return (va-vb)*sign;}else if(key.startsWith('parcours:')){const code=key.slice(9),wa=wishDataForRow(a),wb=wishDataForRow(b),aa=String(a.CodeParcours||'').trim()===code,ab=String(b.CodeParcours||'').trim()===code;va=aa?0:(wa[code]||99);vb=ab?0:(wb[code]||99);return (Number(va)-Number(vb))*sign;}else{va=a.Ecole;vb=b.Ecole;}return compareText(va,vb)*sign||baseComparator(a,b);});}else rows.sort(baseComparator);
       const codeSet=new Set();rows.forEach(r=>{Object.keys(wishDataForRow(r)).forEach(code=>codeSet.add(code));if(hasAssignedCode(r))codeSet.add(String(r.CodeParcours).trim());});
-      const codes=[...codeSet].sort((a,b)=>a.localeCompare(b,'fr',{numeric:true})),names={};
-      ecolesRecords.forEach(r=>{const code=String(r.CodeParcours||'').trim(),name=String(r.NomParcours||'').trim();if(code&&name&&!names[code])names[code]=name;});
-      (voeuxRecords||[]).concat(parcoursRecords||[]).forEach(v=>{const code=String(v.CodeParcours??v.Code??v.Code_parcours??'').trim(),name=String(v.NomParcours??v.Parcours??v.LibelleParcours??v.Nom??'').trim();if(code&&name&&!names[code])names[code]=name;});
+      const codes=[...codeSet].sort((a,b)=>a.localeCompare(b,'fr',{numeric:true})),yearNames={};
+      (parcoursRecords||[]).filter(p=>String(p.AnneeScolaire??'').trim()===year).forEach(p=>{const code=String(p.CodeParcours??'').trim();if(code)yearNames[code]=String(p.NomParcours??('Parcours '+code));});
       const devices=[['PasseportMusique','Passeport Musique'],['Ecole_Cinema','École & Cinéma'],...(peacGridCycle==='EE'?[['Chorale_CRR93','Chorale CRR93'],['Sensibilisation_CHAM_CHAT','CHAM / CHAT']]:[])];
       const count=rows.length,assigned=rows.filter(hasAssignedCode).length,hasWishes=rows.filter(r=>Object.keys(wishDataForRow(r)).length>0).length;
       const sum=document.getElementById('peac-grid-summary');if(sum)sum.textContent=count+' classe(s) affichée(s) · '+assigned+' parcours attribué(s) · '+(count-assigned)+' sans attribution · '+hasWishes+' classe(s) avec vœux';
-      if(!count){wrap.innerHTML='<div class="peac-grid-empty">Aucune classe ne correspond aux filtres.</div>';return;}
+      if(!count){wrap.innerHTML='<div class="peac-grid-empty">Aucune classe ne correspond aux filtres.</div>';renderGridColumnControls(codes,devices);return;}
       peacGridTeacherRows=rows.slice();
-      const fixedHeaders=['École','Enseignant / classe','Niveau','Effectif'];
-      const top='<thead><tr><th colspan="4" class="fixed-col">Classe</th><th colspan="'+devices.length+'" class="eac-group">Dispositifs EAC hors parcours</th><th colspan="'+(codes.length+1)+'">Parcours EAC</th></tr><tr>'+fixedHeaders.map((h,i)=>peacGridHeader(h,['school','teacher','level','effectif'][i],'fixed-col fixed-'+(i+1))).join('')+devices.map(d=>peacGridHeader(d[1],'device:'+d[0],'eac-col-header')).join('')+peacGridHeader('Parcours attribué','assigned')+codes.map(code=>peacGridHeader(code+' — '+(names[code]||'Parcours '+code),'parcours:'+code)).join('')+'</tr></thead>';
-      const body='<tbody>'+rows.map(r=>{const wishes=wishDataForRow(r),noWish=!Object.keys(wishes).length,hasAssignment=hasAssignedCode(r),rowClass=noWish?'no-wish-row':(!hasAssignment?'wish-no-assignment-row':''),teacher=teacherDisplay(r)||'—',fixed=[r.Ecole||'École non renseignée',teacher,extractValues(r.Niveau).join(', ')||'—',numericCost(r.EffectifsClasse).toLocaleString('fr-FR')];let tr='<tr class="'+rowClass+'">'+fixed.map((v,i)=>'<td class="fixed-col fixed-'+(i+1)+'">'+(i===1?'<button type="button" class="peac-teacher-detail" onclick="showTeacherContact('+rows.indexOf(r)+')" title="Afficher les coordonnées de cet enseignant">'+escapeHtml(v)+'</button>':escapeHtml(v))+'</td>').join('');tr+=devices.map(d=>'<td class="eac-col" title="'+escapeHtml(d[1])+'">'+(peacGridDevice(r,d[0])?'✓':'—')+'</td>').join('');const assignedCode=hasAssignedCode(r)?String(r.CodeParcours).trim():'';tr+='<td class="'+(assignedCode?'assigned-cell':'empty-cell')+'">'+(assignedCode?escapeHtml(assignedCode):'—')+'</td>';tr+=codes.map(code=>{if(code===assignedCode)return '<td class="assigned-cell" title="Parcours attribué">ATTRIBUÉ</td>';const rank=wishes[code];return rank?'<td class="wish-cell wish-'+Math.min(Number(rank),5)+'" title="Vœu '+rank+'">V'+rank+'</td>':'<td class="empty-cell">·</td>';}).join('');return tr+'</tr>';}).join('')+'</tbody>';
-      wrap.innerHTML='<table class="peac-matrix peac-matrix">'+top+body+'</table>';
+      const fixedHeaders=['École','Enseignant','Niveau','Effectif'];
+      const top='<thead><tr><th colspan="2" class="fixed-col">École / enseignant</th><th colspan="2">Classe</th><th colspan="'+(codes.length+1)+'">Parcours EAC</th><th colspan="'+devices.length+'" class="eac-group">Dispositifs EAC hors parcours</th></tr><tr>'+
+        peacGridHeader(fixedHeaders[0],'school','fixed-col fixed-1')+
+        peacGridHeader(fixedHeaders[1],'teacher','fixed-col fixed-2')+
+        peacGridHeader(fixedHeaders[2],'level','grid-col-3')+
+        peacGridHeader(fixedHeaders[3],'effectif','grid-col-4')+
+        peacGridHeader('Parcours attribué','assigned','grid-col-assigned')+
+        codes.map(code=>peacGridHeader(code+' — '+(yearNames[code]||'Parcours '+code),'parcours:'+code,'grid-col-wish')).join('')+
+        devices.map(d=>peacGridHeader(d[1],'device:'+d[0],'eac-col-header')).join('')+'</tr></thead>';
+      const body='<tbody>'+rows.map(r=>{
+        const wishes=wishDataForRow(r),noWish=!Object.keys(wishes).length,hasAssignment=hasAssignedCode(r),rowClass=noWish?'no-wish-row':(!hasAssignment?'wish-no-assignment-row':''),teacher=teacherDisplay(r)||'—';
+        const fixed=[r.Ecole||'École non renseignée',teacher,extractValues(r.Niveau).join(', ')||'—',numericCost(r.EffectifsClasse).toLocaleString('fr-FR')];
+        let tr='<tr class="'+rowClass+'">'+fixed.map((v,i)=>'<td class="'+(i<2?'fixed-col fixed-'+(i+1):i===2?'grid-col-3':'grid-col-4')+'">'+(i===1?'<button type="button" class="peac-teacher-detail" onclick="showTeacherContact('+rows.indexOf(r)+')" title="Afficher les coordonnées de cet enseignant">'+escapeHtml(v)+'</button>':escapeHtml(v))+'</td>').join('');
+        const assignedCode=hasAssignment?String(r.CodeParcours).trim():'';
+        tr+='<td data-col-key="assigned" class="'+(assignedCode?'assigned-cell':'empty-cell')+'">'+(assignedCode?escapeHtml(assignedCode):'—')+'</td>';
+        tr+=codes.map(code=>{if(code===assignedCode)return '<td data-col-key="wish:'+escapeHtml(code)+'" class="assigned-cell" title="Parcours attribué">ATTRIBUÉ</td>';const rank=wishes[code];return rank?'<td data-col-key="wish:'+escapeHtml(code)+'" class="wish-cell wish-'+Math.min(Number(rank),5)+'" title="Vœu '+rank+'">V'+rank+'</td>':'<td data-col-key="wish:'+escapeHtml(code)+'" class="empty-cell">·</td>';}).join('');
+        tr+=devices.map(d=>'<td data-col-key="device:'+escapeHtml(d[0])+'" class="eac-col" title="'+escapeHtml(d[1])+'">'+(peacGridDevice(r,d[0])?'✓':'—')+'</td>').join('');
+        return tr+'</tr>';
+      }).join('')+'</tbody>';
+      const topWithKeys=top.replace('class="grid-col-assigned"','class="grid-col-assigned" data-col-key="assigned"').replace(/class="grid-col-wish"/g,'class="grid-col-wish"');
+      const bodyWithHeaders=body;
+      renderGridColumnControls(codes,devices);
+      wrap.innerHTML='<table class="peac-matrix peac-matrix">'+topWithKeys+bodyWithHeaders+'</table>';applyGridColumnVisibility();
     }
     function updateDashboard() {
       syncPeacYearSelectors();
@@ -628,7 +665,10 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
           const cout = numericCost(r.CoutParcours);
           stats.parcours.budget += cout;
           schoolMap[schoolKey].budget += cout;
-          const nm=String(r.NomParcours||'').trim(); if(nm && !schoolMap[schoolKey].parcours.some(x=>x.nom===nm)) schoolMap[schoolKey].parcours.push({nom:nm,disciplines:getDisciplines(r),partenaire:(voeuxMap[code] && voeuxMap[code].size===1 ? [...voeuxMap[code]][0] : (voeuxMap[code] && voeuxMap[code].size>1 ? 'Plusieurs partenaires possibles' : '')),cout});
+          const nm=String(r.NomParcours||pathwayNameForCode(code,r.AnneeScolaire)).trim();
+          let pathway=schoolMap[schoolKey].parcours.find(x=>x.code===code);
+          if(!pathway){const partners=partnersForCodeYear(code,r.AnneeScolaire);pathway={code,nom:nm,disciplines:getDisciplines(r),partenaire:partners.length===1?partners[0]:partners.length>1?'Plusieurs partenaires possibles':'',cout,classes:[]};schoolMap[schoolKey].parcours.push(pathway);}
+          pathway.classes.push({teacher:teacherDisplay(r)||'Enseignant non renseigné',level:extractValues(r.Niveau).join(', ')||'Niveau non renseigné',effectif:numericCost(r.EffectifsClasse)});
         }
 
         if (hasPassMusique) { stats.passMusique.classes++; stats.passMusique.eleves += eff; schoolMap[schoolKey].mus++; }
@@ -669,14 +709,34 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
       summaryCache = Object.keys(schoolMap).sort().map(sKey=>({key:sKey,...schoolMap[sKey]}));
       summaryCache.forEach(d=>{
         const tr=document.createElement('tr');
+        tr.className='summary-row-clickable';tr.tabIndex=0;
         tr.innerHTML=`<td><strong>${escapeHtml(d.key)}</strong></td><td><span class="badge">${d.classes}</span></td><td>${d.eleves}</td><td>${d.eac} cl.</td><td><strong>${d.budget.toLocaleString('fr-FR')} €</strong></td><td>${d.mus} cl.</td><td>${d.cin} cl.</td><td>${d.cho} cl.</td><td>${d.cham} cl.</td><td><button class="detail-btn" type="button">Voir les parcours</button></td>`;
-        tr.querySelector('button').addEventListener('click',()=>showDetail(d)); tbody.appendChild(tr);
+        tr.addEventListener('click',()=>showDetail(d));tr.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();showDetail(d);}});
+        tr.querySelector('button').addEventListener('click',e=>{e.stopPropagation();showDetail(d);}); tbody.appendChild(tr);
       });
       renderPeacGrid();
       if(document.body.classList.contains('peac-analysis-active'))renderPeacAnalysis();
     }
 
 
+    function pathwayRecordForYear(code,year){
+      return (parcoursRecords||[]).find(p=>String(p.CodeParcours??'').trim()===String(code??'').trim()&&String(p.AnneeScolaire??'').trim()===String(year??'').trim())||null;
+    }
+    function partnersForCodeYear(code,year){
+      const p=pathwayRecordForYear(code,year),values=[...extractValues(p?.Partenaire)];
+      (voeuxRecords||[]).forEach(v=>{
+        if(String(v.AnneeScolaire??'').trim()!==String(year??'').trim()||String(v.CodeParcours??'').trim()!==String(code??'').trim())return;
+        values.push(...extractValues(v.Partenaire));
+      });
+      return [...new Set(values.map(x=>String(x).trim()).filter(Boolean))];
+    }
+    function canonicalCulturalField(field){
+      const key=normalizeKey(field);
+      if(key.includes('cinema')||key.includes('audiovisuel'))return 'Cinéma / Audiovisuel';
+      if(key.includes('archeologie')||key.includes('histoire')||key.includes('patrimoine')||key.includes('sciences humaines'))return 'Histoire / patrimoine';
+      if(key.includes('metiers d art')||key.includes('gastronomie'))return 'Métiers d’art / Gastronomie';
+      return String(field||'Champ non renseigné').trim();
+    }
     function renderPeacAnalysis(){
       const host=document.getElementById('peac-analysis-content');
       if(!host||!Array.isArray(ecolesRecords)||!sourceRecordsLoaded)return;
@@ -686,71 +746,77 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
       const isEM=r=>/maternelle|^em$/i.test(String(r.Cycle||''));
       const cycleName=r=>isEE(r)?'Élémentaire':isEM(r)?'Maternelle':'Autre / non renseigné';
       const pathways=new Map();
-      (parcoursRecords||[]).forEach(p=>{
-        const code=String(p.CodeParcours??p.Code??p.Code_parcours??'').trim();
-        if(!code)return;
-        const name=String(p.NomParcours??p.Parcours??p.LibelleParcours??('Parcours '+code)).trim();
-        const disciplines=getDisciplines({TypeParcours:p.TypeParcours,NomParcours:p.NomParcours,CodeParcours:code});
-        pathways.set(code,{code,name,nbMax:Number(p.NbMax)||0,disciplines:disciplines.length?disciplines:['Champ non renseigné']});
+      (parcoursRecords||[]).filter(p=>String(p.AnneeScolaire??'').trim()===year).forEach(p=>{
+        const code=String(p.CodeParcours??'').trim();if(!code)return;
+        const name=String(p.NomParcours??('Parcours '+code)).trim();
+        const rawDisciplines=getDisciplines(p);
+        const disciplines=[...new Set((rawDisciplines.length?rawDisciplines:['Champ non renseigné']).map(canonicalCulturalField))];
+        pathways.set(code,{code,name,nbMax:Number(p.NbMax)||0,disciplines,record:p});
       });
       const stats=new Map();
       const ensure=field=>{if(!stats.has(field))stats.set(field,{possible:new Set(),capacity:0,wishClasses:new Set(),wishes:0,assigned:new Set(),assignedEE:new Set(),assignedEM:new Set()});return stats.get(field);};
-      pathways.forEach(p=>p.disciplines.forEach(d=>{const s=ensure(d);s.possible.add(p.code);s.capacity+=p.nbMax;}));
-      rows.forEach((r,index)=>{
-        const id=String(r.id??(r.Ecole+'|'+teacherDisplay(r)+'|'+index));
-        const cyc=cycleName(r);
-        // La capacité théorique provient de NbMax dans Table_parcours.
-        const wishes=wishDataForRow(r);
-        Object.keys(wishes).forEach(code=>{
-          const p=pathways.get(code),ds=p?.disciplines?.length?p.disciplines:['Champ non renseigné'];
-          ds.forEach(d=>{const s=ensure(d);s.wishClasses.add(id);s.wishes++;});
-        });
-        if(hasAssignedCode(r)){
-          const code=String(r.CodeParcours).trim(),p=pathways.get(code),ownDisciplines=getDisciplines(r);
-          const ds=p?.disciplines?.length?p.disciplines:ownDisciplines.length?ownDisciplines:['Champ non renseigné'];
-          ds.forEach(d=>{const s=ensure(d);s.assigned.add(id);if(cyc==='Élémentaire')s.assignedEE.add(id);if(cyc==='Maternelle')s.assignedEM.add(id);});
+      pathways.forEach(p=>p.disciplines.forEach(d=>{const st=ensure(d);st.possible.add(p.code);st.capacity+=p.nbMax;}));
+      const wishRows=(voeuxRecords||[]).filter(v=>String(v.AnneeScolaire??'').trim()===year);
+      const wishClassKeys=new Set();
+      let totalWishes=0;
+      wishRows.forEach((v,index)=>{
+        let hasAny=false;
+        for(let rank=1;rank<=6;rank++){
+          const code=parseWishCell(v['Voeu'+rank]);if(!code)continue;
+          hasAny=true;totalWishes++;
+          const p=pathways.get(code);if(!p)continue;
+          const classKey=String(v.id??(normalizeKey(v.NomEnseignant)+'|'+normalizeKey(v.PrenomEnseignant)+'|'+normalizeKey(v.Ecole)+'|'+index));
+          p.disciplines.forEach(field=>{const st=ensure(field);st.wishClasses.add(classKey);st.wishes++;});
         }
+        if(hasAny)wishClassKeys.add(String(v.id??(normalizeKey(v.NomEnseignant)+'|'+normalizeKey(v.PrenomEnseignant)+'|'+normalizeKey(v.Ecole)+'|'+index)));
       });
-      const fieldRows=[...stats.entries()].sort((a,b)=>a[0].localeCompare(b[0],'fr')).map(([field,s])=>'<tr><td><button type="button" class="peac-field-detail" data-field="'+escapeHtml(field)+'">'+escapeHtml(field)+'</button></td><td class="num">'+s.possible.size+'</td><td class="num">'+s.capacity+'</td><td class="num">'+s.wishClasses.size+'</td><td class="num">'+s.wishes+'</td><td class="num">'+s.assignedEE.size+'</td><td class="num">'+s.assignedEM.size+'</td><td class="num"><strong>'+s.assigned.size+'</strong></td></tr>').join('');
-      const totalPossible=pathways.size,totalClasses=rows.length,totalWishes=rows.reduce((n,r)=>n+Object.keys(wishDataForRow(r)).length,0),totalAssigned=rows.filter(hasAssignedCode).length,totalWishClasses=rows.filter(r=>Object.keys(wishDataForRow(r)).length>0).length;
+      rows.forEach((r,index)=>{
+        if(!hasAssignedCode(r))return;
+        const code=String(r.CodeParcours).trim(),p=pathways.get(code);
+        const ownDisciplines=p?.disciplines?.length?p.disciplines:getDisciplines(r).map(canonicalCulturalField);
+        const ds=ownDisciplines.length?ownDisciplines:['Champ non renseigné'];
+        const id=String(r.id??(r.Ecole+'|'+teacherDisplay(r)+'|'+index)),cyc=cycleName(r);
+        ds.forEach(field=>{const st=ensure(field);st.assigned.add(id);if(cyc==='Élémentaire')st.assignedEE.add(id);if(cyc==='Maternelle')st.assignedEM.add(id);});
+      });
+      const fieldRows=[...stats.entries()].sort((a,b)=>a[0].localeCompare(b[0],'fr')).map(([field,st])=>'<tr><td><button type="button" class="peac-field-detail" data-field="'+escapeHtml(field)+'">'+escapeHtml(field)+'</button></td><td class="num">'+st.possible.size+'</td><td class="num">'+st.capacity+'</td><td class="num">'+st.wishClasses.size+'</td><td class="num">'+st.wishes+'</td><td class="num">'+st.assignedEE.size+'</td><td class="num">'+st.assignedEM.size+'</td><td class="num"><strong>'+st.assigned.size+'</strong></td></tr>').join('');
+      const totalPossible=pathways.size,totalClasses=rows.length,totalAssigned=rows.filter(hasAssignedCode).length,totalWishClasses=wishClassKeys.size;
       const partnerStats=new Map();
       pathways.forEach(p=>{
-        const partners=voeuxMap[p.code]?[...voeuxMap[p.code]]:[];
-        partners.forEach(partner=>{
+        partnersForCodeYear(p.code,year).forEach(partner=>{
           if(!partnerStats.has(partner))partnerStats.set(partner,{codes:new Set(),fields:new Set(),assigned:new Set()});
-          const s=partnerStats.get(partner);s.codes.add(p.code);p.disciplines.forEach(d=>s.fields.add(d));
+          const st=partnerStats.get(partner);st.codes.add(p.code);p.disciplines.forEach(d=>st.fields.add(d));
         });
       });
       rows.forEach((r,i)=>{
         if(!hasAssignedCode(r))return;
-        const code=String(r.CodeParcours).trim(),partners=voeuxMap[code]?[...voeuxMap[code]]:[];
-        partners.forEach(partner=>{
+        const code=String(r.CodeParcours).trim();
+        partnersForCodeYear(code,year).forEach(partner=>{
           if(!partnerStats.has(partner))partnerStats.set(partner,{codes:new Set([code]),fields:new Set(),assigned:new Set()});
-          const s=partnerStats.get(partner);s.assigned.add(String(r.id??(r.Ecole+'|'+teacherDisplay(r)+'|'+i)));
+          partnerStats.get(partner).assigned.add(String(r.id??(r.Ecole+'|'+teacherDisplay(r)+'|'+i)));
         });
       });
-      const partnerRows=[...partnerStats.entries()].sort((a,b)=>a[0].localeCompare(b[0],'fr')).map(([partner,s])=>'<tr><td><strong>'+escapeHtml(partner)+'</strong></td><td class="num">'+s.codes.size+'</td><td>'+escapeHtml([...s.fields].sort((a,b)=>a.localeCompare(b,'fr')).join(', ')||'Non renseigné')+'</td><td class="num">'+s.assigned.size+'</td></tr>').join('');
+      const partnerRows=[...partnerStats.entries()].sort((a,b)=>a[0].localeCompare(b[0],'fr')).map(([partner,st])=>'<tr><td><strong>'+escapeHtml(partner)+'</strong></td><td class="num">'+st.codes.size+'</td><td>'+escapeHtml([...st.fields].sort((a,b)=>a.localeCompare(b,'fr')).join(', ')||'Non renseigné')+'</td><td class="num">'+st.assigned.size+'</td></tr>').join('');
       const percent=(n,d)=>d?((100*n/d).toLocaleString('fr-FR',{maximumFractionDigits:1})+' %'):'—';
       host.innerHTML=
         '<div class="peac-analysis-kpis">'+
-        '<div class="peac-analysis-kpi"><strong>'+totalPossible+'</strong><span>Parcours distincts dans le catalogue</span></div>'+
+        '<div class="peac-analysis-kpi"><strong>'+totalPossible+'</strong><span>Parcours distincts dans le catalogue pour '+escapeHtml(year)+'</span></div>'+
         '<div class="peac-analysis-kpi"><strong>'+totalClasses+'</strong><span>Classes recensées pour l’année</span></div>'+
-        '<div class="peac-analysis-kpi"><strong>'+totalWishClasses+'</strong><span>Classes ayant formulé au moins un vœu ('+percent(totalWishClasses,totalClasses)+')</span></div>'+
+        '<div class="peac-analysis-kpi"><strong>'+totalWishClasses+'</strong><span>Lignes de Table_voeux ayant au moins un vœu ('+percent(totalWishClasses,wishRows.length)+')</span></div>'+
         '<div class="peac-analysis-kpi"><strong>'+totalAssigned+'</strong><span>Classes avec attribution ('+percent(totalAssigned,totalClasses)+')</span></div>'+
-        '<div class="peac-analysis-kpi"><strong>'+totalWishes+'</strong><span>Vœux individuels identifiés</span></div></div>'+
+        '<div class="peac-analysis-kpi"><strong>'+totalWishes+'</strong><span>Vœux individuels renseignés dans Table_voeux</span></div></div>'+
         '<h3 class="peac-analysis-section">Offre, éligibilité, vœux et attributions par champ culturel</h3>'+
         '<div class="peac-analysis-table-wrap"><table class="peac-analysis-table"><thead><tr><th>Champ culturel</th><th>Parcours possibles</th><th>Classes potentiellement bénéficiaires (Σ NbMax)</th><th>Classes ayant fait au moins un vœu</th><th>Nombre de vœux</th><th>Attribuées Élémentaire</th><th>Attribuées Maternelle</th><th>Total attribuées</th></tr></thead><tbody>'+
         (fieldRows||'<tr><td colspan="8">Aucune donnée disciplinaire exploitable.</td></tr>')+
         '</tbody></table></div>'+
         '<h3 class="peac-analysis-section">Vœux par champ culturel</h3>'+
         '<div class="peac-analysis-table-wrap"><table class="peac-analysis-table"><thead><tr><th>Champ culturel</th><th>Nombre de vœux</th><th>Part de l’ensemble des vœux</th><th>Classes ayant exprimé un vœu</th></tr></thead><tbody>'+
-        ([...stats.entries()].sort((a,b)=>b[1].wishes-a[1].wishes||a[0].localeCompare(b[0],'fr')).map(([field,s])=>'<tr><td><strong>'+escapeHtml(field)+'</strong></td><td class="num">'+s.wishes+'</td><td class="num">'+percent(s.wishes,totalWishes)+'</td><td class="num">'+s.wishClasses.size+'</td></tr>').join('')||'<tr><td colspan="4">Aucun vœu reconnu pour cette année.</td></tr>')+
+        ([...stats.entries()].sort((a,b)=>b[1].wishes-a[1].wishes||a[0].localeCompare(b[0],'fr')).map(([field,st])=>'<tr><td><strong>'+escapeHtml(field)+'</strong></td><td class="num">'+st.wishes+'</td><td class="num">'+percent(st.wishes,totalWishes)+'</td><td class="num">'+st.wishClasses.size+'</td></tr>').join('')||'<tr><td colspan="4">Aucun vœu reconnu pour cette année.</td></tr>')+
         '</tbody></table></div>'+
         '<h3 class="peac-analysis-section">Parcours et attributions par partenaire</h3>'+
         '<div class="peac-analysis-table-wrap"><table class="peac-analysis-table"><thead><tr><th>Partenaire</th><th>Parcours distincts associés</th><th>Champs culturels</th><th>Classes attribuées</th></tr></thead><tbody>'+
         (partnerRows||'<tr><td colspan="4">Aucun partenaire renseigné dans Table_voeux pour les parcours de cette année.</td></tr>')+
         '</tbody></table></div>'+
-        '<p class="peac-analysis-note"><strong>Lecture des indicateurs :</strong> les parcours possibles sont les codes distincts du catalogue Table_parcours. Les classes potentiellement bénéficiaires sont estimées par la somme des NbMax des parcours du champ culturel dans Table_parcours. TypeParcours sert uniquement à rattacher un parcours à son champ culturel. Les vœux sont comptés par classe et par parcours demandé ; une même classe peut donc compter plusieurs fois dans le nombre de vœux, mais une seule fois dans le nombre de classes ayant fait un vœu. Les attributions proviennent de CodeParcours dans Table_ecoles. Le tableau des partenaires s’appuie sur le champ Partenaire de Table_voeux associé au CodeParcours.</p>';
+        '<p class="peac-analysis-note"><strong>Lecture des indicateurs :</strong> les parcours possibles et les capacités proviennent des lignes de Table_parcours filtrées sur AnneeScolaire. Les vœux sont lus directement dans Voeu1 à Voeu6 de Table_voeux pour la même année. Les catégories culturelles regroupent Cinéma avec Audiovisuel, Histoire/patrimoine avec Archéologie, Histoire de l’art et Sciences Humaines, ainsi que Métiers d’art avec Gastronomie. Les attributions proviennent de CodeParcours dans Table_ecoles. Les partenaires sont recherchés dans Table_parcours et Table_voeux pour l’année sélectionnée.</p>';
       host.querySelectorAll('.peac-field-detail').forEach(button=>button.addEventListener('click',()=>showFieldPathways(button.dataset.field)));
       enablePeacAnalysisSorting(host);
     }
@@ -768,16 +834,17 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
     }
 
     function showFieldPathways(field){
-      const entries=(parcoursRecords||[]).filter(p=>getDisciplines({TypeParcours:p.TypeParcours,NomParcours:p.NomParcours,CodeParcours:p.CodeParcours??p.Code??p.Code_parcours}).some(d=>d===field)).map(p=>{
-        const code=String(p.CodeParcours??p.Code??p.Code_parcours??'').trim();
-        const name=String(p.NomParcours??p.Parcours??p.LibelleParcours??('Parcours '+code)).trim();
+      const year=document.getElementById('filter-annee')?.value||'';
+      const entries=(parcoursRecords||[]).filter(p=>String(p.AnneeScolaire??'').trim()===year&&getDisciplines(p).some(d=>canonicalCulturalField(d)===field)).map(p=>{
+        const code=String(p.CodeParcours??'').trim();
+        const name=String(p.NomParcours??('Parcours '+code)).trim();
         const raw=p.CoutUnitaire,cost=raw===null||raw===undefined||raw===''?null:numericCost(raw);
-        const partners=[...new Set([...(extractValues(p.Partenaire)),...(voeuxMap[code]?[...voeuxMap[code]]:[])])];
+        const partners=partnersForCodeYear(code,year);
         return {name,cost,partners};
       }).sort((a,b)=>a.name.localeCompare(b.name,'fr'));
-      document.getElementById('detail-title').textContent=field+' — Parcours proposés';
+      document.getElementById('detail-title').textContent=field+' — Parcours proposés ('+year+')';
       const rows=entries.map(p=>'<tr><td>'+escapeHtml(p.name)+'</td><td>'+escapeHtml(p.partners.join(' / ')||'Non renseigné')+'</td><td style="text-align:right">'+(p.cost===null?'Non renseigné':p.cost.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €')+'</td></tr>').join('');
-      document.getElementById('detail-content').innerHTML=entries.length?'<div><strong>'+entries.length+' parcours</strong> dans le champ « '+escapeHtml(field)+' ».</div><table><thead><tr><th>Parcours</th><th>Partenaire(s)</th><th>Coût unitaire</th></tr></thead><tbody>'+rows+'</tbody></table>':'<p>Aucun parcours trouvé dans Table_parcours pour ce champ culturel.</p>';
+      document.getElementById('detail-content').innerHTML=entries.length?'<div><strong>'+entries.length+' parcours</strong> dans le champ « '+escapeHtml(field)+' » pour '+escapeHtml(year)+'.</div><table><thead><tr><th>Parcours</th><th>Partenaire(s)</th><th>Coût unitaire</th></tr></thead><tbody>'+rows+'</tbody></table>':'<p>Aucun parcours trouvé dans Table_parcours pour ce champ culturel et cette année scolaire.</p>';
       document.getElementById('detail-modal').classList.add('open');
     }
 
@@ -803,9 +870,18 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
     function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
     function showDetail(d){
       document.getElementById('detail-title').textContent=d.key+' — Parcours attribués';
-      const rows=d.parcours.slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr')).map(p=>`<tr><td>${escapeHtml(p.nom)}</td><td>${escapeHtml(p.disciplines.join(', ')||'Non renseigné')}</td><td>${escapeHtml(p.partenaire||'Non déterminé')}</td><td style="text-align:right">${Number(p.cout||0).toLocaleString('fr-FR')} €</td></tr>`).join('');
-      document.getElementById('detail-content').innerHTML=d.parcours.length?`<div><strong>${d.parcours.length} parcours</strong> · Budget total : <strong>${d.budget.toLocaleString('fr-FR')} €</strong></div><table><thead><tr><th>Parcours</th><th>Discipline</th><th>Partenaire</th><th>Coût</th></tr></thead><tbody>${rows}</tbody></table><div class="modal-total">Total : ${d.budget.toLocaleString('fr-FR')} €</div>`:'<p>Aucun parcours attribué dans les données filtrées pour cette école et ce cycle.</p>';
+      const entries=d.parcours.slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
+      const rows=entries.map((p,i)=>`<tr><td><button type="button" class="peac-detail-pathway" data-pathway-index="${i}">${escapeHtml(p.nom)}</button></td><td>${escapeHtml(p.disciplines.join(', ')||'Non renseigné')}</td><td>${escapeHtml(p.partenaire||'Non déterminé')}</td><td style="text-align:right">${Number(p.cout||0).toLocaleString('fr-FR')} €</td></tr>`).join('');
+      document.getElementById('detail-content').innerHTML=d.parcours.length?`<div><strong>${d.parcours.length} parcours</strong> · Budget total : <strong>${d.budget.toLocaleString('fr-FR')} €</strong></div><p class="peac-analysis-note">Cliquez sur un parcours pour afficher les classes qui en bénéficient.</p><table><thead><tr><th>Parcours</th><th>Discipline</th><th>Partenaire</th><th>Coût</th></tr></thead><tbody>${rows}</tbody></table><div class="modal-total">Total : ${d.budget.toLocaleString('fr-FR')} €</div>`:'<p>Aucun parcours attribué dans les données filtrées pour cette école et ce cycle.</p>';
+      document.querySelectorAll('#detail-content .peac-detail-pathway').forEach(button=>button.addEventListener('click',()=>showPathwayClasses(d,entries[Number(button.dataset.pathwayIndex)])));
       document.getElementById('detail-modal').classList.add('open');
+    }
+    function showPathwayClasses(school,pathway){
+      const classes=pathway.classes||[];
+      const rows=classes.map(c=>'<tr><td>'+escapeHtml(c.teacher)+'</td><td>'+escapeHtml(c.level)+'</td><td style="text-align:right">'+Number(c.effectif||0).toLocaleString('fr-FR')+'</td></tr>').join('');
+      document.getElementById('detail-title').textContent=pathway.nom+' — Classes bénéficiaires';
+      document.getElementById('detail-content').innerHTML='<p><strong>'+escapeHtml(school.key)+'</strong> · '+classes.length+' classe(s) bénéficiaire(s)</p>'+(classes.length?'<table><thead><tr><th>Enseignant</th><th>Niveau</th><th>Effectif</th></tr></thead><tbody>'+rows+'</tbody></table>':'<p>Aucune classe bénéficiaire renseignée.</p>')+'<p><button type="button" class="detail-btn" id="back-to-school-pathways">Retour aux parcours</button></p>';
+      document.getElementById('back-to-school-pathways').addEventListener('click',()=>showDetail(school));
     }
     function closeDetail(){document.getElementById('detail-modal').classList.remove('open');}
     function xmlEsc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
