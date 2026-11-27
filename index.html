@@ -544,10 +544,10 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
       let rows=ecolesRecords.filter(r=>String(r.AnneeScolaire||'').trim()===year&&isCycle(r)&&(school==='ALL'||String(r.Ecole||'').trim()===school));
       if(levels.length)rows=rows.filter(r=>extractValues(r.Niveau).some(n=>levels.includes(n)));
       if(disc.length)rows=rows.filter(r=>getDisciplines(r).some(d=>disc.includes(d)));
-      rows=rows.filter(r=>{const assigned=hasAssignedCode(r),hasWish=Object.keys(wishDataForRow(r)).length>0;if(peacGridStatus==='assigned'&&!assigned)return false;if(peacGridStatus==='unassigned'&&assigned)return false;if(peacGridStatus==='wishes'&&!hasWish)return false;const text=[r.Ecole,r.Enseignant,r.Classe,r.NomClasse,r.Niveau,r.CodeParcours,r.NomParcours].map(v=>String(v??'')).join(' ').toLocaleLowerCase('fr')+' '+Object.keys(wishDataForRow(r)).join(' ');return !query||text.includes(query);});
-      const baseComparator=(a,b)=>{if(sort==='teacher')return String(a.Enseignant||a.Classe||a.NomClasse||'').localeCompare(String(b.Enseignant||b.Classe||b.NomClasse||''),'fr');if(sort==='level')return String(a.Niveau||'').localeCompare(String(b.Niveau||''),'fr',{numeric:true});if(sort==='effectif')return numericCost(a.EffectifsClasse)-numericCost(b.EffectifsClasse);if(sort==='effectif-desc')return numericCost(b.EffectifsClasse)-numericCost(a.EffectifsClasse);return String(a.Ecole||'').localeCompare(String(b.Ecole||''),'fr')||String(a.Enseignant||a.Classe||a.NomClasse||'').localeCompare(String(b.Enseignant||b.Classe||b.NomClasse||''),'fr');};
+      rows=rows.filter(r=>{const assigned=hasAssignedCode(r),hasWish=Object.keys(wishDataForRow(r)).length>0;if(peacGridStatus==='assigned'&&!assigned)return false;if(peacGridStatus==='unassigned'&&assigned)return false;if(peacGridStatus==='wishes'&&!hasWish)return false;const text=[r.Ecole,teacherDisplay(r),r.Niveau,r.CodeParcours,r.NomParcours].map(v=>String(v??'')).join(' ').toLocaleLowerCase('fr')+' '+Object.keys(wishDataForRow(r)).join(' ');return !query||text.includes(query);});
+      const baseComparator=(a,b)=>{if(sort==='teacher')return teacherDisplay(a).localeCompare(teacherDisplay(b),'fr');if(sort==='level')return String(a.Niveau||'').localeCompare(String(b.Niveau||''),'fr',{numeric:true});if(sort==='effectif')return numericCost(a.EffectifsClasse)-numericCost(b.EffectifsClasse);if(sort==='effectif-desc')return numericCost(b.EffectifsClasse)-numericCost(a.EffectifsClasse);return String(a.Ecole||'').localeCompare(String(b.Ecole||''),'fr')||teacherDisplay(a).localeCompare(teacherDisplay(b),'fr');};
       const compareText=(a,b)=>String(a??'').localeCompare(String(b??''),'fr',{numeric:true,sensitivity:'base'});
-      if(peacGridHeaderSort){const {key,dir}=peacGridHeaderSort,sign=dir==='asc'?1:-1;rows.sort((a,b)=>{let va,vb;if(key==='school'){va=a.Ecole;vb=b.Ecole;}else if(key==='teacher'){va=a.Enseignant||a.Classe||a.NomClasse;vb=b.Enseignant||b.Classe||b.NomClasse;}else if(key==='level'){va=extractValues(a.Niveau).join(',');vb=extractValues(b.Niveau).join(',');}else if(key==='effectif'){va=numericCost(a.EffectifsClasse);vb=numericCost(b.EffectifsClasse);return (va-vb)*sign;}else if(key==='assigned'){va=String(a.CodeParcours||'');vb=String(b.CodeParcours||'');}else if(key.startsWith('device:')){const k=key.slice(7);va=peacGridDevice(a,k)?1:0;vb=peacGridDevice(b,k)?1:0;return (va-vb)*sign;}else if(key.startsWith('parcours:')){const code=key.slice(9),wa=wishDataForRow(a),wb=wishDataForRow(b),aa=String(a.CodeParcours||'').trim()===code,ab=String(b.CodeParcours||'').trim()===code;va=aa?0:(wa[code]||99);vb=ab?0:(wb[code]||99);return (Number(va)-Number(vb))*sign;}else{va=a.Ecole;vb=b.Ecole;}return compareText(va,vb)*sign||baseComparator(a,b);});}else rows.sort(baseComparator);
+      if(peacGridHeaderSort){const {key,dir}=peacGridHeaderSort,sign=dir==='asc'?1:-1;rows.sort((a,b)=>{let va,vb;if(key==='school'){va=a.Ecole;vb=b.Ecole;}else if(key==='teacher'){va=teacherDisplay(a);vb=teacherDisplay(b);}else if(key==='level'){va=extractValues(a.Niveau).join(',');vb=extractValues(b.Niveau).join(',');}else if(key==='effectif'){va=numericCost(a.EffectifsClasse);vb=numericCost(b.EffectifsClasse);return (va-vb)*sign;}else if(key==='assigned'){va=String(a.CodeParcours||'');vb=String(b.CodeParcours||'');}else if(key.startsWith('device:')){const k=key.slice(7);va=peacGridDevice(a,k)?1:0;vb=peacGridDevice(b,k)?1:0;return (va-vb)*sign;}else if(key.startsWith('parcours:')){const code=key.slice(9),wa=wishDataForRow(a),wb=wishDataForRow(b),aa=String(a.CodeParcours||'').trim()===code,ab=String(b.CodeParcours||'').trim()===code;va=aa?0:(wa[code]||99);vb=ab?0:(wb[code]||99);return (Number(va)-Number(vb))*sign;}else{va=a.Ecole;vb=b.Ecole;}return compareText(va,vb)*sign||baseComparator(a,b);});}else rows.sort(baseComparator);
       const codeSet=new Set();rows.forEach(r=>{Object.keys(wishDataForRow(r)).forEach(code=>codeSet.add(code));if(hasAssignedCode(r))codeSet.add(String(r.CodeParcours).trim());});
       const codes=[...codeSet].sort((a,b)=>a.localeCompare(b,'fr',{numeric:true})),names={};
       ecolesRecords.forEach(r=>{const code=String(r.CodeParcours||'').trim(),name=String(r.NomParcours||'').trim();if(code&&name&&!names[code])names[code]=name;});
@@ -559,7 +559,7 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
       peacGridTeacherRows=rows.slice();
       const fixedHeaders=['École','Enseignant / classe','Niveau','Effectif'];
       const top='<thead><tr><th colspan="4" class="fixed-col">Classe</th><th colspan="'+devices.length+'" class="eac-group">Dispositifs EAC hors parcours</th><th colspan="'+(codes.length+1)+'">Parcours EAC</th></tr><tr>'+fixedHeaders.map((h,i)=>peacGridHeader(h,['school','teacher','level','effectif'][i],'fixed-col fixed-'+(i+1))).join('')+devices.map(d=>peacGridHeader(d[1],'device:'+d[0],'eac-col-header')).join('')+peacGridHeader('Parcours attribué','assigned')+codes.map(code=>peacGridHeader(code+' — '+(names[code]||'Parcours '+code),'parcours:'+code)).join('')+'</tr></thead>';
-      const body='<tbody>'+rows.map(r=>{const wishes=wishDataForRow(r),noWish=!Object.keys(wishes).length,hasAssignment=hasAssignedCode(r),rowClass=noWish?'no-wish-row':(!hasAssignment?'wish-no-assignment-row':''),teacher=r.Enseignant||r.Classe||r.NomClasse||'—',fixed=[r.Ecole||'École non renseignée',teacher,extractValues(r.Niveau).join(', ')||'—',numericCost(r.EffectifsClasse).toLocaleString('fr-FR')];let tr='<tr class="'+rowClass+'">'+fixed.map((v,i)=>'<td class="fixed-col fixed-'+(i+1)+'">'+(i===1?'<button type="button" class="peac-teacher-detail" onclick="showTeacherContact('+rows.indexOf(r)+')" title="Afficher les coordonnées de cet enseignant">'+escapeHtml(v)+'</button>':escapeHtml(v))+'</td>').join('');tr+=devices.map(d=>'<td class="eac-col" title="'+escapeHtml(d[1])+'">'+(peacGridDevice(r,d[0])?'✓':'—')+'</td>').join('');const assignedCode=hasAssignedCode(r)?String(r.CodeParcours).trim():'';tr+='<td class="'+(assignedCode?'assigned-cell':'empty-cell')+'">'+(assignedCode?escapeHtml(assignedCode):'—')+'</td>';tr+=codes.map(code=>{if(code===assignedCode)return '<td class="assigned-cell" title="Parcours attribué">ATTRIBUÉ</td>';const rank=wishes[code];return rank?'<td class="wish-cell wish-'+Math.min(Number(rank),5)+'" title="Vœu '+rank+'">V'+rank+'</td>':'<td class="empty-cell">·</td>';}).join('');return tr+'</tr>';}).join('')+'</tbody>';
+      const body='<tbody>'+rows.map(r=>{const wishes=wishDataForRow(r),noWish=!Object.keys(wishes).length,hasAssignment=hasAssignedCode(r),rowClass=noWish?'no-wish-row':(!hasAssignment?'wish-no-assignment-row':''),teacher=teacherDisplay(r)||'—',fixed=[r.Ecole||'École non renseignée',teacher,extractValues(r.Niveau).join(', ')||'—',numericCost(r.EffectifsClasse).toLocaleString('fr-FR')];let tr='<tr class="'+rowClass+'">'+fixed.map((v,i)=>'<td class="fixed-col fixed-'+(i+1)+'">'+(i===1?'<button type="button" class="peac-teacher-detail" onclick="showTeacherContact('+rows.indexOf(r)+')" title="Afficher les coordonnées de cet enseignant">'+escapeHtml(v)+'</button>':escapeHtml(v))+'</td>').join('');tr+=devices.map(d=>'<td class="eac-col" title="'+escapeHtml(d[1])+'">'+(peacGridDevice(r,d[0])?'✓':'—')+'</td>').join('');const assignedCode=hasAssignedCode(r)?String(r.CodeParcours).trim():'';tr+='<td class="'+(assignedCode?'assigned-cell':'empty-cell')+'">'+(assignedCode?escapeHtml(assignedCode):'—')+'</td>';tr+=codes.map(code=>{if(code===assignedCode)return '<td class="assigned-cell" title="Parcours attribué">ATTRIBUÉ</td>';const rank=wishes[code];return rank?'<td class="wish-cell wish-'+Math.min(Number(rank),5)+'" title="Vœu '+rank+'">V'+rank+'</td>':'<td class="empty-cell">·</td>';}).join('');return tr+'</tr>';}).join('')+'</tbody>';
       wrap.innerHTML='<table class="peac-matrix peac-matrix">'+top+body+'</table>';
     }
     function updateDashboard() {
@@ -697,7 +697,7 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
       const ensure=field=>{if(!stats.has(field))stats.set(field,{possible:new Set(),capacity:0,wishClasses:new Set(),wishes:0,assigned:new Set(),assignedEE:new Set(),assignedEM:new Set()});return stats.get(field);};
       pathways.forEach(p=>p.disciplines.forEach(d=>{const s=ensure(d);s.possible.add(p.code);s.capacity+=p.nbMax;}));
       rows.forEach((r,index)=>{
-        const id=String(r.id??(r.Ecole+'|'+(r.Enseignant||r.Classe||r.NomClasse)+'|'+index));
+        const id=String(r.id??(r.Ecole+'|'+teacherDisplay(r)+'|'+index));
         const cyc=cycleName(r);
         // La capacité théorique provient de NbMax dans Table_parcours.
         const wishes=wishDataForRow(r);
@@ -726,7 +726,7 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
         const code=String(r.CodeParcours).trim(),partners=voeuxMap[code]?[...voeuxMap[code]]:[];
         partners.forEach(partner=>{
           if(!partnerStats.has(partner))partnerStats.set(partner,{codes:new Set([code]),fields:new Set(),assigned:new Set()});
-          const s=partnerStats.get(partner);s.assigned.add(String(r.id??(r.Ecole+'|'+(r.Enseignant||r.Classe||r.NomClasse)+'|'+i)));
+          const s=partnerStats.get(partner);s.assigned.add(String(r.id??(r.Ecole+'|'+teacherDisplay(r)+'|'+i)));
         });
       });
       const partnerRows=[...partnerStats.entries()].sort((a,b)=>a[0].localeCompare(b[0],'fr')).map(([partner,s])=>'<tr><td><strong>'+escapeHtml(partner)+'</strong></td><td class="num">'+s.codes.size+'</td><td>'+escapeHtml([...s.fields].sort((a,b)=>a.localeCompare(b,'fr')).join(', ')||'Non renseigné')+'</td><td class="num">'+s.assigned.size+'</td></tr>').join('');
@@ -757,13 +757,8 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
 
     function showTeacherContact(index){
       const r=peacGridTeacherRows[index];if(!r)return;
-      const teacher=String(r.Enseignant||r.NomEnseignant||r.Professeur||r.Classe||r.NomClasse||'').trim();
-      const school=normalizeKey(r.Ecole||r.École);
-      const matches=(voeuxRecords||[]).filter(v=>{
-        const vt=normalizeKey(v.Enseignant||v.NomEnseignant||v.Professeur||v.Classe||v.NomClasse||v.Nom||v.NomAgent||v.NomComplet);
-        const vs=normalizeKey(v.Ecole||v.École||v.Structure||v.Etablissement||v.EtablissementScolaire);
-        return teacher&&vt===normalizeKey(teacher)&&(!vs||!school||vs===school);
-      });
+      const teacher=teacherDisplay(r);
+      const matches=findTeacherVoeuxRows(r);
       const collect=key=>[...new Set(matches.map(v=>String(v[key]??'').trim()).filter(Boolean))];
       const mails=collect('Mail'),phones=collect('Telephone');
       const contactLine=(label,values,type)=>'<div class="peac-contact-line"><strong>'+label+'</strong><div>'+ (values.length?values.map(v=>type==='mail'?'<a href="mailto:'+escapeHtml(v)+'">'+escapeHtml(v)+'</a>':type==='phone'?'<a href="tel:'+escapeHtml(v)+'">'+escapeHtml(v)+'</a>':escapeHtml(v)).join('<br>'):'Non renseigné')+'</div></div>';
@@ -817,36 +812,42 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
     function excelCell(v){return `<Cell><Data ss:Type="${typeof v==='number'&&Number.isFinite(v)?'Number':'String'}">${xmlEsc(v)}</Data></Cell>`;}
     function xmlEsc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
     function normalizeKey(v){return String(v??'').trim().toLocaleLowerCase('fr').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');}
-    function parseWishesText(raw){
-      const out={},text=String(raw??'').trim();
-      if(!text)return out;
-      // Format Framaforms : « 1: 117 Nom du parcours | 2: 116 ... »
-      const re=/(?:^|\|\s*)(\d+)\s*[:.)-]\s*(\d+)(?:\s+([^|]*))?/g;
-      let m;
-      while((m=re.exec(text))!==null){
-        const rank=Number(m[1]),code=String(m[2]).trim();
-        if(code&&Number.isFinite(rank)&&rank>0)out[code]=rank;
-      }
-      return out;
+    function teacherDisplay(r){
+      return [r.PrenomEnseignant,r.NomEnseignant].map(v=>String(v??'').trim()).filter(Boolean).join(' ');
+    }
+    function teacherIdentity(r){
+      return normalizeKey(r.NomEnseignant)+'|'+normalizeKey(r.PrenomEnseignant);
+    }
+    function findTeacherVoeuxRows(r){
+      const identity=teacherIdentity(r),school=normalizeKey(r.Ecole),year=String(r.AnneeScolaire??'').trim();
+      if(!normalizeKey(r.NomEnseignant)||!normalizeKey(r.PrenomEnseignant))return [];
+      return (voeuxRecords||[]).filter(v=>{
+        if(teacherIdentity(v)!==identity)return false;
+        const vs=normalizeKey(v.Ecole),vy=String(v.AnneeScolaire??'').trim();
+        return (!school||!vs||school===vs)&&(!year||!vy||year===vy);
+      });
+    }
+    function parseWishCell(raw){
+      const match=String(raw??'').trim().match(/^(\\d+)/);
+      return match?match[1]:null;
     }
     function wishDataForRow(r){
-      const out={};
-      ['Voeux','VoeuxExprimes','Voeux_exprimes','Vœux','VœuxExprimes'].forEach(k=>Object.assign(out,parseWishesText(r[k])));
-      const teacher=normalizeKey(r.Enseignant||r.NomEnseignant||r.Professeur||r.Classe||r.NomClasse),school=normalizeKey(r.Ecole||r.École);
-      (voeuxRecords||[]).forEach(v=>{
-        const vt=normalizeKey(v.Enseignant||v.NomEnseignant||v.Professeur||v.Classe||v.NomClasse||v.Nom||v.NomAgent||v.NomComplet),
-          vs=normalizeKey(v.Ecole||v.École||v.Structure||v.Etablissement||v.EtablissementScolaire);
-        if(!teacher||vt!==teacher||(vs&&school&&vs!==school))return;
-        Object.keys(v).forEach(key=>{
-          const val=v[key];
-          if(typeof val==='string'&&/(?:^|\|\s*)\d+\s*[:.)-]\s*\d+/.test(val)) Object.assign(out,parseWishesText(val));
-          else if(Array.isArray(val))val.forEach(x=>{if(typeof x==='string'&&/(?:^|\|\s*)\d+\s*[:.)-]\s*\d+/.test(x)) Object.assign(out,parseWishesText(x));});
-        });
-        const c=String(v.CodeParcours??v.Code??v.Code_parcours??'').trim(),
-          rank=Number(v.RangVoeu??v.Rang??v.OrdreVoeu??v.Ordre??v.NumeroVoeu??v.NumVoeu??v.Priorite??v.Priorité);
-        if(c&&Number.isFinite(rank)&&rank>0)out[c]=rank;
+      const out={},matches=findTeacherVoeuxRows(r);
+      matches.forEach(v=>{
+        for(let rank=1;rank<=6;rank++){
+          const code=parseWishCell(v['Voeu'+rank]);
+          if(code&&!out[code])out[code]=rank;
+        }
       });
       return out;
+    }
+    function formatWishesForExport(r){
+      const wishes=wishDataForRow(r);
+      return Object.entries(wishes).sort((a,b)=>a[1]-b[1]).map(([code,rank])=>rank+': '+code+' '+pathwayNameForCode(code,r.AnneeScolaire)).join(' | ');
+    }
+    function pathwayNameForCode(code,year){
+      const record=(parcoursRecords||[]).find(p=>String(p.CodeParcours??'').trim()===String(code).trim()&&String(p.AnneeScolaire??'').trim()===String(year??'').trim());
+      return String(record?.NomParcours??('Parcours '+code)).trim();
     }
     function excelCell(v,style){
       const item=v&&typeof v==='object'&&Object.prototype.hasOwnProperty.call(v,'v')?v:{v,s:style};
@@ -863,7 +864,7 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
       [['Élémentaire',isEE],['Maternelle',isEM]].forEach(([cycle,fn])=>{const subset=yearRows.filter(fn);summary.push([`Total ${cycle}`,'',subset.length,'',subset.reduce((a,r)=>a+numericCost(r.EffectifsClasse),0)]);devicesSummary.filter(([n])=>!(cycle==='Maternelle'&&(n==='Chorale CRR93'||n==='Sensibilisation CHAM/CHAT'))).forEach(([name,dev])=>{const eligible=subset.filter(dev);summary.push([`${name} — ${cycle}`,eligible.length,subset.length,eligible.reduce((a,r)=>a+numericCost(r.EffectifsClasse),0),subset.reduce((a,r)=>a+numericCost(r.EffectifsClasse),0)]);});});
       summary.push(['Coût prévisionnel total (€)',cost,'','','']);summary.push(['Écoles / cycles',new Set(yearRows.map(r=>`${r.Ecole||''}|${r.Cycle||''}`)).size,'','','']);
       const rowsAttributions=[['Cycle','École','Niveau','Enseignant','Effectif classe','Code attribué','Parcours attribué','Partenaire','Coût estimé (€)','Vœux exprimés']];
-      yearRows.forEach(r=>{const c=String(r.CodeParcours??'').trim();rowsAttributions.push([r.Cycle||'',r.Ecole||'',extractValues(r.Niveau).join(', '),r.Enseignant||r.Classe||'Enseignant non renseigné',numericCost(r.EffectifsClasse),c,r.NomParcours||'',voeuxMap[c]?[...voeuxMap[c]].join(' / '):'',numericCost(r.CoutParcours),r.Voeux||r.VoeuxExprimes||'']);});
+      yearRows.forEach(r=>{const c=String(r.CodeParcours??'').trim();rowsAttributions.push([r.Cycle||'',r.Ecole||'',extractValues(r.Niveau).join(', '),teacherDisplay(r)||'Enseignant non renseigné',numericCost(r.EffectifsClasse),c,r.NomParcours||'',voeuxMap[c]?[...voeuxMap[c]].join(' / '):'',numericCost(r.CoutParcours),formatWishesForExport(r)]);});
       const group={};yearRows.forEach(r=>{const k=`${r.Ecole||'École non renseignée'} (${r.Cycle||'Cycle non renseigné'})`;group[k]??={classes:0,eleves:0,eac:0,cost:0,mus:0,cin:0,cho:0,cham:0};const g=group[k];g.classes++;g.eleves+=numericCost(r.EffectifsClasse);if(hasAssignedCode(r)){g.eac++;g.cost+=numericCost(r.CoutParcours);}if(dispositif(r,'PasseportMusique'))g.mus++;if(dispositif(r,'Ecole_Cinema'))g.cin++;if(dispositif(r,'Chorale_CRR93'))g.cho++;if(dispositif(r,'Sensibilisation_CHAM_CHAT'))g.cham++;});
       const detail=[['Cycle','Code','Parcours','Discipline','Partenaire(s)','Nb attribué','Coût moyen / classe (€)','Coût total (€)']],byCode={};
       assigned.forEach(r=>{const c=String(r.CodeParcours);byCode[c]??={cycle:r.Cycle||'',code:c,name:r.NomParcours||'',disc:new Set(),partners:new Set(),n:0,cost:0};const x=byCode[c];getDisciplines(r).forEach(d=>x.disc.add(d));if(voeuxMap[c])voeuxMap[c].forEach(p=>x.partners.add(p));x.n++;x.cost+=numericCost(r.CoutParcours);});
@@ -872,11 +873,11 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
       function matrixSheet(kind){
         const re=kind==='EE'?isEE:isEM,subset=yearRows.filter(re),wish=subset.map(wishDataForRow),codes=new Set();wish.forEach(w=>Object.keys(w).forEach(c=>codes.add(c)));subset.filter(hasAssignedCode).forEach(r=>codes.add(String(r.CodeParcours)));
         const codeList=[...codes].sort((a,b)=>a.localeCompare(b,'fr',{numeric:true})),names={};subset.forEach(r=>{if(hasAssignedCode(r)&&r.NomParcours)names[String(r.CodeParcours)]=r.NomParcours;});
-        voeuxRecords.forEach(v=>{const c=String(v.CodeParcours??v.Code??'').trim(),n=String(v.NomParcours??v.Parcours??v.LibelleParcours??'').trim();if(c&&n&&!names[c])names[c]=n;});parcoursRecords.forEach(v=>{const c=String(v.CodeParcours??v.Code??v.Code_parcours??'').trim(),n=String(v.NomParcours??v.Parcours??v.LibelleParcours??'').trim();if(c&&n&&!names[c])names[c]=n;});
+        voeuxRecords.forEach(v=>{const c=String(v.CodeParcours??v.Code??'').trim(),n=String(v.NomParcours??v.Parcours??v.LibelleParcours??'').trim();if(c&&n&&!names[c])names[c]=n;});parcoursRecords.filter(v=>String(v.AnneeScolaire??'').trim()===String(yearRows[0]?.AnneeScolaire??'').trim()).forEach(v=>{const c=String(v.CodeParcours??'').trim(),n=String(v.NomParcours??'').trim();if(c&&n)names[c]=n;});
         const data=[['École','Enseignant','Niveau','Effectif','Code attribué',...codeList.map(c=>`${c} — ${names[c]||'Parcours '+c}`)]];
-        subset.forEach((r,i)=>{const noWish=!Object.keys(wish[i]).length,teacher=r.Enseignant||r.Classe||r.NomClasse||'Enseignant non renseigné';const row=[r.Ecole||'École non renseignée',teacher,extractValues(r.Niveau).join(', '),numericCost(r.EffectifsClasse),String(r.CodeParcours??'')].map(v=>noWish?{v,s:'NoWish'}:v);codeList.forEach(c=>{const isAssigned=hasAssignedCode(r)&&String(r.CodeParcours)===c,rank=wish[i][c];row.push(isAssigned?{v:'ATTRIBUE',s:'Assigned'}:rank?{v:rank,s:rank===1?'Wish1':rank===2?'Wish2':rank===3?'Wish3':rank===4?'Wish4':'Wish5'}:'');});data.push(row);});return data;
+        subset.forEach((r,i)=>{const noWish=!Object.keys(wish[i]).length,teacher=teacherDisplay(r)||'Enseignant non renseigné';const row=[r.Ecole||'École non renseignée',teacher,extractValues(r.Niveau).join(', '),numericCost(r.EffectifsClasse),String(r.CodeParcours??'')].map(v=>noWish?{v,s:'NoWish'}:v);codeList.forEach(c=>{const isAssigned=hasAssignedCode(r)&&String(r.CodeParcours)===c,rank=wish[i][c];row.push(isAssigned?{v:'ATTRIBUE',s:'Assigned'}:rank?{v:rank,s:rank===1?'Wish1':rank===2?'Wish2':rank===3?'Wish3':rank===4?'Wish4':'Wish5'}:'');});data.push(row);});return data;
       }
-      const sheets=[['Synthèse',summary],['Attributions',rowsAttributions],['Détail parcours',detail],['Élémentaire',matrixSheet('EE')],['Maternelle',matrixSheet('EM')],['Méthode et réserves',[['Sujet','Hypothèse / commentaire'],['Source','Table_ecoles ; année sélectionnée'],['Vœux individuels','Champs Voeux/VoeuxExprimes ou Table_voeux lorsque les données permettent le rapprochement enseignant/classe'],['Code couleur','Vœu 1 bleu ; 2 jaune ; 3 violet ; 4 orange ; 5 et suivants vert ; attribution noir et blanc'],['Sans vœu','Ligne jaune lorsque aucun vœu n’est identifié']]]];
+      const sheets=[['Synthèse',summary],['Attributions',rowsAttributions],['Détail parcours',detail],['Élémentaire',matrixSheet('EE')],['Maternelle',matrixSheet('EM')],['Méthode et réserves',[['Sujet','Hypothèse / commentaire'],['Source','Table_ecoles ; année sélectionnée'],['Vœux individuels','Champs Voeu1 à Voeu6 de Table_voeux, rapprochés par nom, prénom, école et année scolaire'],['Code couleur','Vœu 1 bleu ; 2 jaune ; 3 violet ; 4 orange ; 5 et suivants vert ; attribution noir et blanc'],['Sans vœu','Ligne jaune lorsque aucun vœu n’est identifié']]]];
       const styles='<Styles><Style ss:ID="Default" ss:Name="Normal"><Alignment ss:Vertical="Center" ss:WrapText="1"/><Font ss:FontName="Calibri" ss:Size="10"/></Style><Style ss:ID="Header"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#24476B" ss:Pattern="Solid"/><Alignment ss:WrapText="1" ss:Vertical="Center"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#FFFFFF"/></Borders></Style><Style ss:ID="Body"><Alignment ss:Vertical="Center" ss:WrapText="1"/><Font ss:FontName="Calibri" ss:Size="10"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D9E2F3"/></Borders></Style><Style ss:ID="NoWish"><Interior ss:Color="#FFF2CC" ss:Pattern="Solid"/><Alignment ss:Vertical="Center" ss:WrapText="1"/><Font ss:FontName="Calibri" ss:Size="10"/></Style><Style ss:ID="Wish1"><Interior ss:Color="#5B9BD5" ss:Pattern="Solid"/><Font ss:Bold="1" ss:Color="#FFFFFF"/><Alignment ss:Horizontal="Center" ss:Vertical="Center"/></Style><Style ss:ID="Wish2"><Interior ss:Color="#FFE699" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center"/></Style><Style ss:ID="Wish3"><Interior ss:Color="#C9B2E8" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center"/></Style><Style ss:ID="Wish4"><Interior ss:Color="#F4B183" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center"/></Style><Style ss:ID="Wish5"><Interior ss:Color="#A9D18E" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center"/></Style><Style ss:ID="Assigned"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#000000" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center"/></Style></Styles>';
       // Génération d'un véritable classeur Excel OpenXML (.xlsx), sans dépendance externe.
       const xesc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
@@ -916,7 +917,7 @@ body.peac-analysis-active #peac-analysis-view{display:block!important}
       if(!rows.length){alert('Aucune donnée trouvée dans Table_ecoles pour cette année scolaire.');return;}
       const groups={};rows.forEach(r=>{const key=`${r.Ecole||'École non renseignée'} — ${r.Cycle||'Cycle non renseigné'}`;(groups[key]??=[]).push(r);});
       const entries=Object.entries(groups).sort(([a],[b])=>a.localeCompare(b,'fr')),items=[];
-      entries.forEach(([key,rs])=>{items.push({type:'heading',text:key});rs.slice().sort((a,b)=>String(a.Enseignant||a.Classe||'').localeCompare(String(b.Enseignant||b.Classe||''),'fr')).forEach(r=>items.push({type:'row',teacher:r.Enseignant||r.Classe||r.NomClasse||'Enseignant non renseigné',effectif:numericCost(r.EffectifsClasse),items:[...(hasAssignedCode(r)?[`Parcours EAC : ${r.NomParcours||('Code '+r.CodeParcours)}${voeuxMap[String(r.CodeParcours)]?.size?` — partenaire : ${Array.from(voeuxMap[String(r.CodeParcours)]).join(' / ')}`:''}${getDisciplines(r).length?` — discipline : ${getDisciplines(r).join(', ')}`:''}`]:[]),...(dispositif(r,'Chorale_CRR93')?['Chorale CRR93']:[]),...(dispositif(r,'PasseportMusique')?['Passeport Musique']:[]),...(dispositif(r,'Sensibilisation_CHAM_CHAT')?['Sensibilisation CHAM/CHAT']:[]),...(dispositif(r,'Ecole_Cinema')?['École & Cinéma']:[])]}));});
+      entries.forEach(([key,rs])=>{items.push({type:'heading',text:key});rs.slice().sort((a,b)=>String(a.Enseignant||a.Classe||'').localeCompare(String(b.Enseignant||b.Classe||''),'fr')).forEach(r=>items.push({type:'row',teacher:teacherDisplay(r)||'Enseignant non renseigné',effectif:numericCost(r.EffectifsClasse),items:[...(hasAssignedCode(r)?[`Parcours EAC : ${r.NomParcours||('Code '+r.CodeParcours)}${voeuxMap[String(r.CodeParcours)]?.size?` — partenaire : ${Array.from(voeuxMap[String(r.CodeParcours)]).join(' / ')}`:''}${getDisciplines(r).length?` — discipline : ${getDisciplines(r).join(', ')}`:''}`]:[]),...(dispositif(r,'Chorale_CRR93')?['Chorale CRR93']:[]),...(dispositif(r,'PasseportMusique')?['Passeport Musique']:[]),...(dispositif(r,'Sensibilisation_CHAM_CHAT')?['Sensibilisation CHAM/CHAT']:[]),...(dispositif(r,'Ecole_Cinema')?['École & Cinéma']:[])]}));});
       const files=makeWordFiles(year,entries.length,rows.length,rows.filter(hasAssignedCode).length,items);
       const blob=new Blob([makeStoredZip(files)],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`Synthese_dispositifs_PEAC_${year.replace('/','-')||'annee'}.docx`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
     }
